@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/login_card.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -6,12 +7,11 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: Text(
-          'Fleet Control',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: LoginCard(),
           ),
         ),
       ),

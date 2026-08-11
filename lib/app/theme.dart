@@ -1,31 +1,39 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primary = Color(0xff1565C0);
+  AppTheme._();
+
+  static const Color primaryColor = Color(0xFF1565C0);
+  static const Color secondaryColor = Color(0xFF0D47A1);
+  static const Color successColor = Color(0xFF2E7D32);
+  static const Color errorColor = Color(0xFFC62828);
+  static const Color backgroundColor = Color(0xFFF5F5F5);
 
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: primary,
-      scaffoldBackgroundColor: Colors.grey.shade100,
-
+      colorSchemeSeed: primaryColor,
+      scaffoldBackgroundColor: backgroundColor,
       appBarTheme: const AppBarTheme(
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
         centerTitle: true,
-        elevation: 0,
       ),
-
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 50),
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-        ),
-      ),
-
-      inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
