@@ -2,7 +2,7 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../../../shared/models/user_model.dart';
+import '../../users/models/user_model.dart';
 import '../models/login_result.dart';
 
 class AuthService {
