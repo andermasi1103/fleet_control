@@ -1,29 +1,24 @@
 import '../models/user_session.dart';
+import '../../../core/constants/app_constants.dart';
 
 class SessionState {
   final UserSession? session;
 
-  const SessionState({
-    this.session,
-  });
+  const SessionState({this.session});
 
-  bool get isAuthenticated =>
-      session != null;
+  bool get isAuthenticated => session != null;
 
   bool get isAdmin =>
-      session?.user.isAdmin ?? false;
+      session?.user.rol == AppConstants.adminRole;
 
   bool get isSupervisor =>
-      session?.user.isSupervisor ?? false;
+      session?.user.rol == AppConstants.supervisorRole;
 
   bool get isChofer =>
-      session?.user.isChofer ?? false;
+      session?.user.rol == AppConstants.choferRole;
 
   bool get isUser =>
-      session?.user.isUser ?? false;
-
-  UserSession? get currentSession =>
-      session;
+      session?.user.rol == AppConstants.userRole;
 
   SessionState copyWith({
     Object? session = _sentinel,
