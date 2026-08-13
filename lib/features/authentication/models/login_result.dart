@@ -1,4 +1,4 @@
-import '../../../shared/models/user_model.dart';
+import '../../users/models/user_model.dart';
 
 class LoginResult {
   const LoginResult({

@@ -1,4 +1,4 @@
-import '../../../shared/models/user_model.dart';
+import '../../users/models/user_model.dart';
 
 class UserSession {
   final UserModel user;
@@ -23,7 +23,8 @@ class UserSession {
       user: user ?? this.user,
       loginAt: loginAt ?? this.loginAt,
       lastActivity: lastActivity ?? this.lastActivity,
-      rememberSession: rememberSession ?? this.rememberSession,
+      rememberSession:
+          rememberSession ?? this.rememberSession,
     );
   }
 }
