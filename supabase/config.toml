@@ -1,0 +1,98 @@
+# Fleet Control valida su propio sessionToken; no usa JWT de Supabase Auth.
+[functions.auth-login]
+verify_jwt = false
+
+[functions.attendance-create]
+verify_jwt = false
+
+[functions.attendance-status]
+verify_jwt = false
+[functions.attendance-history]
+verify_jwt = false
+[functions.companies-list]
+verify_jwt = false
+[functions.companies-create]
+verify_jwt = false
+[functions.companies-update]
+verify_jwt = false
+[functions.locations-list]
+verify_jwt = false
+[functions.locations-create]
+verify_jwt = false
+[functions.locations-update]
+verify_jwt = false
+[functions.users-list]
+verify_jwt = false
+[functions.roles-list]
+verify_jwt = false
+[functions.users-create]
+verify_jwt = false
+[functions.users-update]
+verify_jwt = false
+[functions.users-reset-password]
+verify_jwt = false
+[functions.profile-change-password]
+verify_jwt = false
+[functions.vehicles-list]
+verify_jwt = false
+[functions.vehicles-create]
+verify_jwt = false
+[functions.vehicles-update]
+verify_jwt = false
+[functions.session-logout]
+verify_jwt = false
+[functions.user-locations-list]
+verify_jwt = false
+[functions.user-locations-update]
+verify_jwt = false
+[functions.my-locations-list]
+verify_jwt = false
+[functions.orders-list]
+verify_jwt = false
+[functions.orders-create]
+verify_jwt = false
+[functions.orders-detail]
+verify_jwt = false
+[functions.orders-cancel]
+verify_jwt = false
+[functions.order-descriptions-list]
+verify_jwt = false
+[functions.order-descriptions-create]
+verify_jwt = false
+[functions.order-descriptions-update]
+verify_jwt = false
+[functions.managements-list]
+verify_jwt = false
+[functions.managements-create]
+verify_jwt = false
+[functions.managements-detail]
+verify_jwt = false
+[functions.managements-update-status]
+verify_jwt = false
+[functions.drivers-list]
+verify_jwt = false
+[functions.driver-location-update]
+verify_jwt = false
+[functions.fleet-locations-list]
+verify_jwt = false
+[functions.user-vehicle-get]
+verify_jwt = false
+[functions.user-vehicle-update]
+verify_jwt = false
+[functions.driver-orders-available]
+verify_jwt = false
+[functions.driver-order-claim]
+verify_jwt = false
+
+[functions.my-views]
+verify_jwt = false
+[functions.role-views-list]
+verify_jwt = false
+[functions.role-view-update]
+verify_jwt = false
+
+[functions.reports-data]
+verify_jwt = false
+
+[functions.locations-import]
+verify_jwt = false

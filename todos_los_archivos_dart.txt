@@ -1,0 +1,2637 @@
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\test_supabase.dart
+====================
+
+import 'dart:developer' as developer;
+
+/// Script legado deshabilitado.
+///
+/// La autenticación se realiza exclusivamente mediante Supabase Auth. Este
+/// proyecto no consulta ni filtra tablas por contraseña desde el cliente.
+void main() {
+  developer.log(
+    'Prueba de autenticación retirada: usa el flujo de Supabase Auth.',
+    name: 'FleetControl',
+  );
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\.dart_tool\dartpad\web_plugin_registrant.dart
+====================
+
+// Flutter web plugin registrant file.
+//
+// Generated file. Do not edit.
+//
+
+// @dart = 2.13
+// ignore_for_file: type=lint
+
+import 'package:app_links_web/app_links_web.dart';
+import 'package:flutter_secure_storage_web/flutter_secure_storage_web.dart';
+import 'package:shared_preferences_web/shared_preferences_web.dart';
+import 'package:url_launcher_web/url_launcher_web.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+
+void registerPlugins([final Registrar? pluginRegistrar]) {
+  final Registrar registrar = pluginRegistrar ?? webPluginRegistrar;
+  AppLinksPluginWeb.registerWith(registrar);
+  FlutterSecureStorageWeb.registerWith(registrar);
+  SharedPreferencesPlugin.registerWith(registrar);
+  UrlLauncherPlugin.registerWith(registrar);
+  registrar.registerMessageHandler();
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\main.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'app/app.dart';
+import 'core/config/app_config.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final config = AppConfig.development;
+
+  await Supabase.initialize(
+    url: config.supabaseUrl,
+    publishableKey: config.supabasePublishableKey,
+  );
+
+  runApp(
+    const ProviderScope(
+      child: FleetControlApp(),
+    ),
+  );
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\app\app.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'app_router.dart';
+import 'theme.dart';
+
+class FleetControlApp extends ConsumerWidget {
+  const FleetControlApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
+      title: 'Fleet Control',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      routerConfig: router,
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\app\app_router.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../features/authentication/providers/session_provider.dart';
+import '../features/authentication/widgets/login_card.dart';
+import '../features/dashboard/user_dashboard.dart';
+import '../shared/widgets/app_loading.dart';
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final session = ref.watch(sessionProvider);
+
+  return GoRouter(
+    initialLocation: '/splash',
+    routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) {
+          return const Scaffold(body: AppLoading());
+        },
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) {
+          return const Scaffold(
+            body: SafeArea(
+              child: Center(child: LoginCard()),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/home',
+        builder: (context, state) {
+          return const UserDashboard();
+        },
+      ),
+    ],
+    redirect: (context, state) {
+      final path = state.uri.path;
+      final isSplash = path == '/splash';
+      final isLogin = path == '/login';
+
+      if (session.isInitializing) {
+        return isSplash ? null : '/splash';
+      }
+
+      if (!session.isAuthenticated) {
+        return isLogin ? null : '/login';
+      }
+
+      if (isSplash || isLogin) {
+        return '/home';
+      }
+
+      // El contrato actual contiene rol_id, no el nombre o permisos del rol.
+      // Se limita temporalmente a la pantalla común hasta contar con ese contrato.
+      return path == '/home' ? null : '/home';
+    },
+  );
+});
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\app\theme.dart
+====================
+
+import 'package:flutter/material.dart';
+
+class AppTheme {
+  AppTheme._();
+
+  static const Color primaryColor = Color(0xFF1565C0);
+  static const Color secondaryColor = Color(0xFF0D47A1);
+  static const Color successColor = Color(0xFF2E7D32);
+  static const Color errorColor = Color(0xFFC62828);
+  static const Color backgroundColor = Color(0xFFF5F5F5);
+
+  static ThemeData get light {
+    return ThemeData(
+      useMaterial3: true,
+      colorSchemeSeed: primaryColor,
+      scaffoldBackgroundColor: backgroundColor,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        centerTitle: true,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\config\app_config.dart
+====================
+
+import 'environment.dart';
+
+class AppConfig {
+  final Environment environment;
+  final String supabaseUrl;
+  final String supabasePublishableKey;
+  final String traccarApiBaseUrl;
+  final String traccarAuthorization;
+
+  const AppConfig({
+    required this.environment,
+    required this.supabaseUrl,
+    required this.supabasePublishableKey,
+    required this.traccarApiBaseUrl,
+    required this.traccarAuthorization,
+  });
+
+  bool get isProduction => environment.isProduction;
+
+  static const development = AppConfig(
+    environment: Environment.development,
+    supabaseUrl: 'https://sjwzjuailcteqrkhjqze.supabase.co',
+    supabasePublishableKey:
+        'sb_publishable_2-bfhvSw_OIu3J1WCbFbOw_CKf9Idwl',
+    traccarApiBaseUrl: String.fromEnvironment(
+      'TRACCAR_API_BASE_URL',
+      defaultValue: 'https://traccar.example.com/api',
+    ),
+    // Debe contener el valor completo del header Authorization. Por ejemplo:
+    // --dart-define=TRACCAR_AUTHORIZATION="Bearer <token>"
+    traccarAuthorization: String.fromEnvironment('TRACCAR_AUTHORIZATION'),
+  );
+
+  static const production = AppConfig(
+    environment: Environment.production,
+    supabaseUrl: 'https://sjwzjuailcteqrkhjqze.supabase.co',
+    supabasePublishableKey:
+        'sb_publishable_2-bfhvSw_OIu3J1WCbFbOw_CKf9Idwl',
+    traccarApiBaseUrl: String.fromEnvironment(
+      'TRACCAR_API_BASE_URL',
+      defaultValue: 'https://traccar.example.com/api',
+    ),
+    traccarAuthorization: String.fromEnvironment('TRACCAR_AUTHORIZATION'),
+  );
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\config\environment.dart
+====================
+
+enum Environment {
+  development,
+  staging,
+  production,
+}
+
+extension EnvironmentExtension on Environment {
+  String get name {
+    switch (this) {
+      case Environment.development:
+        return 'development';
+      case Environment.staging:
+        return 'staging';
+      case Environment.production:
+        return 'production';
+    }
+  }
+
+  bool get isProduction => this == Environment.production;
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\constants\app_constants.dart
+====================
+
+class AppConstants {
+  // ============================================================
+  // SUPABASE
+  // ============================================================
+
+  static const String apiUrl =
+      'https://sjwzjuailcteqrkhjqze.supabase.co';
+
+  static const String apiKey =
+      'sb_publishable_2-bfhvSw_OIu3J1WCbFbOw_CKf9Idwl';
+
+  // ============================================================
+  // ROLES
+  // ============================================================
+
+  static const String adminRole = 'admin';
+
+  static const String supervisorRole = 'supervisor';
+
+  static const String choferRole = 'chofer';
+
+  static const String userRole = 'user';
+
+  // ============================================================
+  // APP
+  // ============================================================
+
+  static const String version = '1.0.0';
+
+  // ============================================================
+  // NETWORK
+  // ============================================================
+
+  static const Duration connectionTimeout =
+      Duration(seconds: 10);
+
+  static const Duration receiveTimeout =
+      Duration(seconds: 10);
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\errors\app_exception.dart
+====================
+
+class AppException implements Exception {
+  final String message;
+  final String? code;
+  final Object? cause;
+
+  const AppException({
+    required this.message,
+    this.code,
+    this.cause,
+  });
+
+  @override
+  String toString() {
+    if (code != null) {
+      return 'AppException($code): $message';
+    }
+
+    return 'AppException: $message';
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\errors\failure.dart
+====================
+
+enum FailureType {
+  invalidCredentials,
+  sessionExpired,
+  userNotFound,
+  userInactive,
+  network,
+  supabase,
+  traccar,
+  timeout,
+  rateLimited,
+  insufficientPermissions,
+  configuration,
+  unknown,
+}
+
+class Failure implements Exception {
+  final String message;
+  final String? code;
+  final FailureType type;
+
+  const Failure({
+    required this.message,
+    this.code,
+    this.type = FailureType.unknown,
+  });
+
+  @override
+  String toString() {
+    if (code != null) {
+      return 'Failure(${type.name}, $code): $message';
+    }
+
+    return 'Failure(${type.name}): $message';
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\network\api_client.dart
+====================
+
+import 'package:dio/dio.dart';
+
+class ApiClient {
+  ApiClient(this._dio);
+
+  final Dio _dio;
+
+  Future<Response<T>> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) {
+    return _dio.get<T>(
+      path,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<Response<T>> post<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) {
+    return _dio.post<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<Response<T>> put<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) {
+    return _dio.put<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<Response<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) {
+    return _dio.patch<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+  }
+
+  Future<Response<T>> delete<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) {
+    return _dio.delete<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\network\dio_client.dart
+====================
+
+import 'package:dio/dio.dart';
+
+import '../config/app_config.dart';
+import 'interceptors/error_interceptor.dart';
+import 'interceptors/logging_interceptor.dart';
+
+class DioClient {
+  DioClient({required AppConfig config});
+
+  /// Crea el cliente de Traccar desde el único punto central de configuración.
+  /// No incluye encabezados ni tokens de Supabase para evitar filtrarlos a Traccar.
+  Dio createTraccarClient({
+    required String baseUrl,
+    required AppConfig config,
+  }) {
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+        headers: const {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    _addInterceptors(dio, config);
+    return dio;
+  }
+
+  void _addInterceptors(Dio dio, AppConfig config) {
+    dio.interceptors.add(ErrorInterceptor());
+
+    if (!config.isProduction) {
+      dio.interceptors.add(LoggingInterceptor());
+    }
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\network\interceptors\auth_interceptor.dart
+====================
+
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\network\interceptors\error_interceptor.dart
+====================
+
+import 'package:dio/dio.dart';
+
+class ErrorInterceptor extends Interceptor {
+  @override
+  void onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) {
+    final message = _getErrorMessage(err);
+
+    final normalizedError = err.copyWith(
+      message: message,
+    );
+
+    handler.next(normalizedError);
+  }
+
+  String _getErrorMessage(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+        return 'Tiempo de conexión agotado.';
+
+      case DioExceptionType.sendTimeout:
+        return 'Tiempo de envío agotado.';
+
+      case DioExceptionType.receiveTimeout:
+        return 'Tiempo de respuesta agotado.';
+
+      case DioExceptionType.transformTimeout:
+        return 'Tiempo de procesamiento agotado.';
+
+      case DioExceptionType.connectionError:
+        return 'No se pudo conectar con el servidor.';
+
+      case DioExceptionType.badResponse:
+        return _getServerMessage(error.response);
+
+      case DioExceptionType.cancel:
+        return 'Solicitud cancelada.';
+
+      case DioExceptionType.badCertificate:
+        return 'Certificado de seguridad inválido.';
+
+      case DioExceptionType.unknown:
+        return 'Ocurrió un error de red.';
+    }
+  }
+
+  String _getServerMessage(
+    Response<dynamic>? response,
+  ) {
+    if (response == null) {
+      return 'El servidor no respondió correctamente.';
+    }
+
+    switch (response.statusCode) {
+      case 401:
+        return 'Sesión no autorizada.';
+
+      case 403:
+        return 'No tienes permisos para realizar esta operación.';
+
+      case 404:
+        return 'Recurso no encontrado.';
+
+      default:
+        if (response.statusCode != null &&
+            response.statusCode! >= 500) {
+          return 'Error interno del servidor.';
+        }
+
+        return 'El servidor rechazó la solicitud.';
+    }
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\network\interceptors\logging_interceptor.dart
+====================
+
+import 'dart:developer' as developer;
+
+import 'package:dio/dio.dart';
+
+class LoggingInterceptor extends Interceptor {
+  @override
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    developer.log(
+      '→ ${options.method} ${options.uri}',
+      name: 'Network',
+    );
+
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    developer.log(
+      '← ${response.statusCode} ${response.requestOptions.uri}',
+      name: 'Network',
+    );
+
+    handler.next(response);
+  }
+
+  @override
+  void onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) {
+    developer.log(
+      '✕ ${err.requestOptions.method} '
+      '${err.requestOptions.uri} '
+      '${err.message}',
+      name: 'Network',
+    );
+
+    handler.next(err);
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\providers\core_providers.dart
+====================
+
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../config/app_config.dart';
+import '../network/dio_client.dart';
+
+final appConfigProvider = Provider<AppConfig>((ref) {
+  return AppConfig.development;
+});
+
+final dioClientProvider = Provider<DioClient>((ref) {
+  return DioClient(
+    config: ref.watch(appConfigProvider),
+  );
+});
+
+final traccarDioProvider = Provider<Dio>((ref) {
+  final config = ref.watch(appConfigProvider);
+
+  return ref.watch(dioClientProvider).createTraccarClient(
+        baseUrl: config.traccarApiBaseUrl,
+        config: config,
+      );
+});
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\services\supabase_service.dart
+====================
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class SupabaseService {
+  SupabaseService._();
+
+  static SupabaseClient get client => Supabase.instance.client;
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\core\storage\local_storage_service.dart
+====================
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+class LocalStorageService {
+  Future<void> writeString({
+    required String key,
+    required String value,
+  }) async {
+    final preferences = await SharedPreferences.getInstance();
+
+    await preferences.setString(
+      key,
+      value,
+    );
+  }
+
+  Future<String?> readString(String key) async {
+    final preferences = await SharedPreferences.getInstance();
+
+    return preferences.getString(key);
+  }
+
+  Future<void> writeBool({
+    required String key,
+    required bool value,
+  }) async {
+    final preferences = await SharedPreferences.getInstance();
+
+    await preferences.setBool(
+      key,
+      value,
+    );
+  }
+
+  Future<bool?> readBool(String key) async {
+    final preferences = await SharedPreferences.getInstance();
+
+    return preferences.getBool(key);
+  }
+
+  Future<void> remove(String key) async {
+    final preferences = await SharedPreferences.getInstance();
+
+    await preferences.remove(key);
+  }
+
+  Future<void> clear() async {
+    final preferences = await SharedPreferences.getInstance();
+
+    await preferences.clear();
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\data\datasources\supabase_auth_data_source.dart
+====================
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../../core/errors/failure.dart';
+import '../dtos/user_profile_dto.dart';
+
+class SupabaseAuthDataSource {
+  SupabaseAuthDataSource(this._client);
+
+  final SupabaseClient _client;
+
+  /// Inicia el flujo por el alias visible. La función resuelve el teléfono en
+  /// servidor y devuelve una sesión emitida por Supabase Auth.
+  Future<void> signInWithUsuarioAndPassword({
+    required String usuario,
+    required String password,
+  }) async {
+    try {
+      final response = await _client.functions.invoke(
+        'auth-login',
+        body: {'usuario': usuario, 'password': password},
+      );
+      final body = _mapResponse(response.data);
+      final accessToken = body['access_token']?.toString();
+      final refreshToken = body['refresh_token']?.toString();
+
+      if (accessToken == null || accessToken.isEmpty ||
+          refreshToken == null || refreshToken.isEmpty) {
+        throw const Failure(
+          message: 'Usuario o contraseña inválidos.',
+          type: FailureType.invalidCredentials,
+        );
+      }
+
+      // No se guarda ni renueva nada manualmente. Este único traspaso entrega
+      // la sesión real a supabase_flutter, que la persiste y gestiona.
+      await _client.auth.setSession(refreshToken, accessToken: accessToken);
+    } on FunctionException catch (error) {
+      final status = error.status;
+      if (status == 401) {
+        throw const Failure(
+          message: 'Usuario o contraseña inválidos.',
+          type: FailureType.invalidCredentials,
+        );
+      }
+      throw const Failure(
+        message: 'No fue posible iniciar sesión. Intenta nuevamente.',
+        type: FailureType.supabase,
+      );
+    } on AuthException {
+      throw const Failure(
+        message: 'No fue posible iniciar sesión. Intenta nuevamente.',
+        type: FailureType.supabase,
+      );
+    }
+  }
+
+  Future<UserProfileDto> getCurrentProfile(Session session) async {
+    final data = await _client
+        .from('usuarios')
+        .select('id, auth_user_id, empresa_id, rol_id, nombre, usuario, activo')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+    if (data == null) {
+      throw const Failure(
+        message: 'No se encontró el perfil de negocio del usuario.',
+        type: FailureType.userNotFound,
+      );
+    }
+
+    final profile = UserProfileDto.fromJson(Map<String, dynamic>.from(data));
+    if (profile.id.isEmpty ||
+        profile.authUserId != session.user.id ||
+        (profile.empresaId?.isEmpty ?? true) ||
+        profile.roleId.isEmpty) {
+      throw const Failure(
+        message: 'El perfil de usuario no es válido.',
+        type: FailureType.userNotFound,
+      );
+    }
+    if (!profile.isActive) {
+      throw const Failure(
+        message: 'Tu usuario se encuentra inactivo.',
+        type: FailureType.userInactive,
+      );
+    }
+    return profile;
+  }
+
+  Future<void> signOut() => _client.auth.signOut();
+
+  Map<String, dynamic> _mapResponse(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    throw const Failure(
+      message: 'Respuesta de autenticación inválida.',
+      type: FailureType.supabase,
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\data\datasources\supabase_client.dart
+====================
+
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\data\dtos\user_profile_dto.dart
+====================
+
+import '../../domain/entities/authenticated_user.dart';
+
+class UserProfileDto {
+  final String id;
+  final String authUserId;
+  final String? empresaId;
+  final String roleId;
+  final String nombre;
+  final String usuario;
+  final bool isActive;
+
+  UserProfileDto({
+    required this.id,
+    required this.authUserId,
+    this.empresaId,
+    required this.roleId,
+    required this.nombre,
+    required this.usuario,
+    required this.isActive,
+  });
+
+  factory UserProfileDto.fromJson(Map<String, dynamic> json) {
+    return UserProfileDto(
+      id: json['id']?.toString() ?? '',
+      authUserId: json['auth_user_id']?.toString() ?? '',
+      empresaId: json['empresa_id']?.toString(),
+      roleId: json['rol_id']?.toString() ?? '',
+      nombre: json['nombre']?.toString() ?? '',
+      usuario: json['usuario']?.toString() ?? '',
+      isActive: json['activo'] == true,
+    );
+  }
+
+  AuthenticatedUser toDomain() {
+    return AuthenticatedUser(
+      id: id,
+      authUserId: authUserId,
+      empresaId: empresaId,
+      roleId: roleId,
+      nombre: nombre,
+      usuario: usuario,
+      isActive: isActive,
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\domain\entities\authenticated_user.dart
+====================
+
+class AuthenticatedUser {
+  const AuthenticatedUser({
+    required this.id,
+    required this.authUserId,
+    required this.roleId,
+    required this.nombre,
+    required this.usuario,
+    required this.isActive,
+    this.empresaId,
+  });
+
+  final String id;
+  final String authUserId;
+  final String? empresaId;
+  final String roleId;
+  final String nombre;
+  final String usuario;
+  final bool isActive;
+
+  String get displayName => nombre.trim().isEmpty ? usuario : nombre;
+
+  AuthenticatedUser copyWith({
+    String? id,
+    String? authUserId,
+    String? empresaId,
+    String? roleId,
+    String? nombre,
+    String? usuario,
+    bool? isActive,
+  }) {
+    return AuthenticatedUser(
+      id: id ?? this.id,
+      authUserId: authUserId ?? this.authUserId,
+      empresaId: empresaId ?? this.empresaId,
+      roleId: roleId ?? this.roleId,
+      nombre: nombre ?? this.nombre,
+      usuario: usuario ?? this.usuario,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\domain\entities\auth_session.dart
+====================
+
+import 'authenticated_user.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Session;
+
+/// Une la sesión oficial de Supabase con el perfil de negocio autorizado.
+/// No copia ni persiste tokens: la SDK es la única dueña de la sesión.
+class AuthSession {
+  const AuthSession({
+    required this.supabaseSession,
+    required this.user,
+  });
+
+  final Session supabaseSession;
+  final AuthenticatedUser user;
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\models\login_result.dart
+====================
+
+import '../../users/models/user_model.dart';
+
+class LoginResult {
+  const LoginResult({
+    required this.isSuccess,
+    this.message,
+    this.user,
+  });
+
+  final bool isSuccess;
+  final String? message;
+  final UserModel? user;
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\models\user_session.dart
+====================
+
+import '../../users/models/user_model.dart';
+
+class UserSession {
+  final UserModel user;
+  final DateTime loginAt;
+  final DateTime? lastActivity;
+  final bool rememberSession;
+
+  const UserSession({
+    required this.user,
+    required this.loginAt,
+    this.lastActivity,
+    this.rememberSession = false,
+  });
+
+  UserSession copyWith({
+    UserModel? user,
+    DateTime? loginAt,
+    DateTime? lastActivity,
+    bool? rememberSession,
+  }) {
+    return UserSession(
+      user: user ?? this.user,
+      loginAt: loginAt ?? this.loginAt,
+      lastActivity: lastActivity ?? this.lastActivity,
+      rememberSession:
+          rememberSession ?? this.rememberSession,
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\providers\login_provider.dart
+====================
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/login_result.dart';
+import 'login_state.dart';
+import 'session_provider.dart';
+
+final loginProvider =
+    NotifierProvider<LoginNotifier, LoginState>(LoginNotifier.new);
+
+class LoginNotifier extends Notifier<LoginState> {
+  @override
+  LoginState build() => const LoginState();
+
+  void togglePasswordVisibility() {
+    state = state.copyWith(obscurePassword: !state.obscurePassword);
+  }
+
+  void clearError() {
+    state = state.copyWith(errorMessage: null);
+  }
+
+  Future<LoginResult> login({
+    required String usuario,
+    required String password,
+  }) async {
+    state = state.copyWith(isLoading: true);
+    clearError();
+
+    try {
+      await ref.read(sessionProvider.notifier).signInWithUsuarioAndPassword(
+            usuario: usuario,
+            password: password,
+          );
+      state = state.copyWith(isLoading: false);
+      return const LoginResult(isSuccess: true, message: 'Login exitoso');
+    } catch (_) {
+      final message = ref.read(sessionProvider).errorMessage ??
+          'No fue posible iniciar sesión.';
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: message,
+      );
+      return LoginResult(isSuccess: false, message: message);
+    }
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\providers\login_state.dart
+====================
+
+class LoginState {
+  final bool isLoading;
+  final bool obscurePassword;
+  final String? errorMessage;
+
+  const LoginState({
+    this.isLoading = false,
+    this.obscurePassword = true,
+    this.errorMessage,
+  });
+
+  LoginState copyWith({
+    bool? isLoading,
+    bool? obscurePassword,
+    String? errorMessage,
+  }) {
+    return LoginState(
+      isLoading: isLoading ?? this.isLoading,
+      obscurePassword: obscurePassword ?? this.obscurePassword,
+      // 🔹 Aquí usamos directamente el valor recibido
+      errorMessage: errorMessage,
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\providers\session_provider.dart
+====================
+
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/errors/failure.dart';
+import '../data/datasources/supabase_auth_data_source.dart';
+import '../domain/entities/auth_session.dart';
+import 'session_state.dart';
+
+final supabaseAuthDataSourceProvider = Provider<SupabaseAuthDataSource>((ref) {
+  return SupabaseAuthDataSource(Supabase.instance.client);
+});
+
+/// Estado de aplicación derivado siempre de la sesión oficial de Supabase.
+/// El SDK se ocupa de persistencia, expiración y renovación de credenciales.
+final sessionProvider =
+    NotifierProvider<SessionNotifier, SessionState>(SessionNotifier.new);
+
+class SessionNotifier extends Notifier<SessionState> {
+  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  SessionState build() {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (authState) => unawaited(_synchronize(authState.session)),
+      onError: (Object _, StackTrace _) {
+        state = const SessionState.failure(
+          'No fue posible comprobar la sesión de Supabase.',
+        );
+      },
+    );
+    ref.onDispose(() => _authSubscription?.cancel());
+
+    final currentSession = Supabase.instance.client.auth.currentSession;
+    if (currentSession == null) {
+      return const SessionState.unauthenticated();
+    }
+
+    unawaited(_synchronize(currentSession));
+    return const SessionState.initializing();
+  }
+
+  Future<void> signInWithUsuarioAndPassword({
+    required String usuario,
+    required String password,
+  }) async {
+    state = const SessionState.initializing();
+    try {
+      await ref.read(supabaseAuthDataSourceProvider).signInWithUsuarioAndPassword(
+            usuario: usuario,
+            password: password,
+          );
+
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) {
+        throw const Failure(
+          message: 'Supabase no creó una sesión válida.',
+          type: FailureType.supabase,
+        );
+      }
+      await _synchronize(session);
+      if (!state.isAuthenticated) {
+        throw Failure(
+          message: state.errorMessage ?? 'No fue posible cargar tu perfil.',
+          type: FailureType.supabase,
+        );
+      }
+    } catch (error) {
+      final message = error is Failure
+          ? error.message
+          : 'No fue posible iniciar sesión. Intenta nuevamente.';
+      state = SessionState.unauthenticated(errorMessage: message);
+      rethrow;
+    }
+  }
+
+  Future<void> signOut() async {
+    await ref.read(supabaseAuthDataSourceProvider).signOut();
+    state = const SessionState.unauthenticated();
+  }
+
+  Future<void> _synchronize(Session? session) async {
+    if (session == null) {
+      state = const SessionState.unauthenticated();
+      return;
+    }
+
+    state = const SessionState.initializing();
+    try {
+      final profile = await ref
+          .read(supabaseAuthDataSourceProvider)
+          .getCurrentProfile(session);
+      state = SessionState.authenticated(
+        AuthSession(supabaseSession: session, user: profile.toDomain()),
+      );
+    } on Failure catch (error) {
+      if (error.type == FailureType.userInactive) {
+        await Supabase.instance.client.auth.signOut();
+      }
+      state = SessionState.unauthenticated(errorMessage: error.message);
+    } catch (_) {
+      state = const SessionState.unauthenticated(
+        errorMessage: 'No fue posible cargar tu perfil de usuario.',
+      );
+    }
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\providers\session_state.dart
+====================
+
+import '../domain/entities/auth_session.dart';
+
+enum SessionStatus {
+  initializing,
+  authenticated,
+  unauthenticated,
+  failure,
+}
+
+class SessionState {
+  const SessionState._({
+    required this.status,
+    this.session,
+    this.errorMessage,
+  });
+
+  const SessionState.initializing()
+      : this._(status: SessionStatus.initializing);
+
+  const SessionState.authenticated(AuthSession session)
+      : this._(
+          status: SessionStatus.authenticated,
+          session: session,
+        );
+
+  const SessionState.unauthenticated({String? errorMessage})
+      : this._(
+          status: SessionStatus.unauthenticated,
+          errorMessage: errorMessage,
+        );
+
+  const SessionState.failure(String errorMessage)
+      : this._(
+          status: SessionStatus.failure,
+          errorMessage: errorMessage,
+        );
+
+  final SessionStatus status;
+  final AuthSession? session;
+  final String? errorMessage;
+
+  bool get isAuthenticated => status == SessionStatus.authenticated;
+
+  bool get isInitializing => status == SessionStatus.initializing;
+
+  bool get isUnauthenticated => status == SessionStatus.unauthenticated;
+
+  bool get hasError => errorMessage != null;
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\screens\login_screen.dart
+====================
+
+import 'package:flutter/material.dart';
+import '../widgets/login_card.dart';
+
+class LoginScreen extends StatelessWidget {
+  const LoginScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: LoginCard(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\services\auth_service.dart
+====================
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class AuthService {
+  final SupabaseClient _supabase;
+
+  AuthService(this._supabase);
+
+  Future<AuthResponse> login({
+    required String usuario,
+    required String password,
+  }) async {
+    final username = usuario.trim().toLowerCase();
+
+    if (username.isEmpty) {
+      throw const AuthException('El usuario es obligatorio.');
+    }
+
+    if (password.isEmpty) {
+      throw const AuthException('La contraseña es obligatoria.');
+    }
+
+    // SOLO PARA PRUEBAS:
+    // Fleet Control recibe "admin",
+    // pero Supabase Auth necesita email o teléfono + contraseña.
+    final internalEmail = '$username@fleetcontrol.local';
+
+    return _supabase.auth.signInWithPassword(
+      email: internalEmail,
+      password: password,
+    );
+  }
+
+  Future<void> logout() async {
+    await _supabase.auth.signOut();
+  }
+
+  User? get currentUser => _supabase.auth.currentUser;
+
+  bool get isAuthenticated => currentUser != null;
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\widgets\login_card.dart
+====================
+
+import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_card.dart';
+import 'login_form.dart';
+import 'login_header.dart';
+import 'login_footer.dart';
+
+class LoginCard extends StatelessWidget {
+  const LoginCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 430),
+      child: AppCard(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                LoginHeader(),
+                SizedBox(height: 32),
+                LoginForm(),
+                SizedBox(height: 24),
+                LoginFooter(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\widgets\login_footer.dart
+====================
+
+import 'package:flutter/material.dart';
+import '../../../core/constants/app_constants.dart';
+
+class LoginFooter extends StatelessWidget {
+  const LoginFooter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Text(
+        'Versión ${AppConstants.version}',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.grey,
+            ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\widgets\login_form.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_text_field.dart';
+import '../providers/login_provider.dart';
+
+class LoginForm extends ConsumerStatefulWidget {
+  const LoginForm({super.key});
+
+  @override
+  ConsumerState<LoginForm> createState() => _LoginFormState();
+}
+
+class _LoginFormState extends ConsumerState<LoginForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _usuarioController;
+  late final TextEditingController _passwordController;
+  late final FocusNode _usuarioFocus;
+  late final FocusNode _passwordFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _usuarioController = TextEditingController();
+    _passwordController = TextEditingController();
+    _usuarioFocus = FocusNode();
+    _passwordFocus = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _usuarioController.dispose();
+    _passwordController.dispose();
+    _usuarioFocus.dispose();
+    _passwordFocus.dispose();
+    super.dispose();
+  }
+
+  void _clearError() {
+    if (ref.read(loginProvider).errorMessage != null) {
+      ref.read(loginProvider.notifier).clearError();
+    }
+  }
+
+  Future<void> _submit() async {
+    final loginNotifier = ref.read(loginProvider.notifier);
+    if (ref.read(loginProvider).isLoading ||
+        !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    final result = await loginNotifier.login(
+      usuario: _usuarioController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (mounted && result.isSuccess) {
+      context.go('/home');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loginState = ref.watch(loginProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          AppTextField(
+            controller: _usuarioController,
+            label: 'Usuario',
+            hint: 'Ingresa tu usuario',
+            prefixIcon: Icons.person_outline,
+            focusNode: _usuarioFocus,
+            textInputAction: TextInputAction.next,
+            autofocus: true,
+            enabled: !loginState.isLoading,
+            validator: (value) {
+              if ((value?.trim() ?? '').isEmpty) {
+                return 'El usuario es obligatorio';
+              }
+              return null;
+            },
+            onFieldSubmitted: (_) {
+              FocusScope.of(context).requestFocus(_passwordFocus);
+            },
+            onChanged: (_) => _clearError(),
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
+            controller: _passwordController,
+            label: 'Contraseña',
+            hint: 'Ingresa tu contraseña',
+            prefixIcon: Icons.lock_outline,
+            suffixIcon: IconButton(
+              icon: Icon(
+                loginState.obscurePassword
+                    ? Icons.visibility
+                    : Icons.visibility_off,
+              ),
+              onPressed: loginState.isLoading
+                  ? null
+                  : ref.read(loginProvider.notifier).togglePasswordVisibility,
+            ),
+            focusNode: _passwordFocus,
+            obscureText: loginState.obscurePassword,
+            enabled: !loginState.isLoading,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'La contraseña es obligatoria';
+              }
+              return null;
+            },
+            onFieldSubmitted: (_) => _submit(),
+            onChanged: (_) => _clearError(),
+          ),
+          const SizedBox(height: 24),
+          AppButton(
+            text: 'Iniciar sesión',
+            onPressed: loginState.isLoading ? null : _submit,
+            loading: loginState.isLoading,
+            icon: Icons.login,
+          ),
+          if (loginState.errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: scheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      loginState.errorMessage!,
+                      style: TextStyle(color: scheme.onErrorContainer),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\authentication\widgets\login_header.dart
+====================
+
+import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_logo.dart';
+
+class LoginHeader extends StatelessWidget {
+  const LoginHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppLogo();
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\dashboard\admin_dashboard.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'app_shell.dart';
+
+class AdminDashboard extends StatelessWidget {
+  const AdminDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      child: Center(
+        child: Text(
+          "Bienvenido, Administrador\nUsuarios: 25\nChoferes: 18\nVehículos: 12\nSupervisores: 4",
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\dashboard\app_shell.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../authentication/providers/session_provider.dart';
+
+class AppShell extends ConsumerWidget {
+  const AppShell({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userName = ref.watch(sessionProvider).session?.user.displayName ??
+        'Usuario';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Fleet Control'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Text('👤 $userName'),
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'Cerrar sesión',
+                  onPressed: () async {
+                    await ref.read(sessionProvider.notifier).signOut();
+                    if (context.mounted) {
+                      context.go('/login');
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      body: child,
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\dashboard\chofer_dashboard.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'app_shell.dart';
+
+class ChoferDashboard extends StatelessWidget {
+  const ChoferDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      child: Center(
+        child: Text(
+          "Bienvenido, Chofer\n\nEstado: Disponible\n\n[ Marcar entrada ]\n[ Mi ubicación ]",
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\dashboard\supervisor_dashboard.dart
+====================
+
+import 'package:flutter/material.dart';
+
+import 'app_shell.dart';
+
+class SupervisorDashboard extends StatelessWidget {
+  const SupervisorDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      child: Center(
+        child: Text(
+          'Bienvenido, Supervisor\n\n'
+          'Panel de supervisión\n\n'
+          '[ Ver choferes ]\n'
+          '[ Gestionar usuarios ]\n'
+          '[ Ver asistencia ]',
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\dashboard\user_dashboard.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'app_shell.dart';
+
+class UserDashboard extends StatelessWidget {
+  const UserDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppShell(
+      child: Center(
+        child: Text(
+          "Bienvenido, Usuario\nFleet Control\n\nSin implementar todavía la lógica real.",
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\home\home_screen.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../authentication/providers/session_provider.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Home'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await ref.read(sessionProvider.notifier).signOut();
+              if (context.mounted) {
+                context.go('/login');
+              }
+            },
+          ),
+        ],
+      ),
+      body: const Center(
+        child: Text('Pantalla Home (usuario)'),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\data\datasources\traccar_authorization_provider.dart
+====================
+
+import '../../../../core/errors/failure.dart';
+
+abstract class TraccarAuthorizationProvider {
+  /// Devuelve el valor completo del encabezado Authorization.
+  /// La implementación debe obtenerlo de un backend o Edge Function seguro.
+  Future<String> getAuthorizationHeader();
+}
+
+class MissingTraccarAuthorizationProvider
+    implements TraccarAuthorizationProvider {
+  const MissingTraccarAuthorizationProvider();
+
+  @override
+  Future<String> getAuthorizationHeader() {
+    throw const Failure(
+      message: 'La autorización segura de Traccar no está configurada.',
+      type: FailureType.configuration,
+    );
+  }
+}
+
+/// Usa un valor inyectado en la configuración de la aplicación.
+///
+/// El valor debe ser el contenido completo del encabezado `Authorization`,
+/// con su esquema incluido si Traccar lo requiere (por ejemplo, `Bearer ...`).
+/// Para instalaciones donde el token no deba estar en el cliente, se puede
+/// reemplazar este provider por uno que solicite un token efímero a un backend.
+class ConfiguredTraccarAuthorizationProvider
+    implements TraccarAuthorizationProvider {
+  const ConfiguredTraccarAuthorizationProvider(this._authorization);
+
+  final String _authorization;
+
+  @override
+  Future<String> getAuthorizationHeader() async {
+    if (_authorization.trim().isEmpty) {
+      throw const Failure(
+        message: 'La autorización de Traccar no está configurada.',
+        type: FailureType.configuration,
+      );
+    }
+
+    return _authorization.trim();
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\data\datasources\traccar_tracking_data_source.dart
+====================
+
+import 'package:dio/dio.dart';
+
+import '../../../../core/errors/failure.dart';
+import 'traccar_authorization_provider.dart';
+
+class TraccarTrackingDataSource {
+  // ✅ inicializadores formales
+  TraccarTrackingDataSource(
+    this._dio,
+    this._authorizationProvider,
+  );
+
+  final Dio _dio;
+  final TraccarAuthorizationProvider _authorizationProvider;
+
+  Future<List<Map<String, dynamic>>> getDevices() => _getCollection('/devices');
+  Future<List<Map<String, dynamic>>> getPositions() => _getCollection('/positions');
+  Future<List<Map<String, dynamic>>> getEvents() => _getCollection('/events');
+
+  Future<List<Map<String, dynamic>>> _getCollection(String path) async {
+    try {
+      final authorization = await _authorizationProvider.getAuthorizationHeader();
+      if (authorization.trim().isEmpty) {
+        throw const Failure(
+          message: 'La autorización segura de Traccar no está configurada.',
+          type: FailureType.configuration,
+        );
+      }
+
+      final response = await _dio.get<dynamic>(
+        path,
+        options: Options(
+          headers: {'Authorization': authorization},
+          extra: const {'skipAuth': true},
+        ),
+      );
+
+      return _asListOfMaps(response.data);
+    } on DioException catch (error) {
+      throw _mapDioFailure(error);
+    }
+  }
+
+  List<Map<String, dynamic>> _asListOfMaps(dynamic data) {
+    if (data is! List) {
+      throw const Failure(
+        message: 'La respuesta de Traccar no tiene el formato esperado.',
+        type: FailureType.traccar,
+      );
+    }
+
+    return data.map((item) {
+      if (item is Map<String, dynamic>) {
+        return item;
+      }
+      if (item is Map) {
+        return Map<String, dynamic>.from(item);
+      }
+
+      throw const Failure(
+        message: 'La respuesta de Traccar contiene un registro inválido.',
+        type: FailureType.traccar,
+      );
+    }).toList(growable: false);
+  }
+
+  Failure _mapDioFailure(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return const Failure(
+          message: 'Traccar tardó demasiado en responder.',
+          type: FailureType.timeout,
+        );
+      case DioExceptionType.connectionError:
+        return const Failure(
+          message: 'No fue posible conectar con Traccar.',
+          type: FailureType.network,
+        );
+      case DioExceptionType.badResponse:
+        if (error.response?.statusCode == 401) {
+          return const Failure(
+            message: 'La autorización de Traccar no es válida.',
+            type: FailureType.traccar,
+          );
+        }
+        if (error.response?.statusCode == 403) {
+          return const Failure(
+            message: 'No tienes permisos para consultar Traccar.',
+            type: FailureType.insufficientPermissions,
+          );
+        }
+        return const Failure(
+          message: 'Traccar no pudo completar la operación.',
+          type: FailureType.traccar,
+        );
+      case DioExceptionType.cancel:
+        return const Failure(
+          message: 'La consulta a Traccar fue cancelada.',
+          type: FailureType.network,
+        );
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.transformTimeout:
+      case DioExceptionType.unknown:
+        return const Failure(
+          message: 'No fue posible procesar la respuesta de Traccar.',
+          type: FailureType.traccar,
+        );
+    }
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\data\dtos\tracking_position_dto.dart
+====================
+
+import '../../../../core/errors/failure.dart';
+import '../../domain/entities/tracking_position.dart';
+
+class TrackingPositionDto {
+  const TrackingPositionDto({
+    required this.id,
+    required this.deviceId,
+    required this.latitude,
+    required this.longitude,
+    required this.speed,
+    required this.attributes,
+  });
+
+  final int id;
+  final int deviceId;
+  final double latitude;
+  final double longitude;
+  final double speed;
+  final Map<String, dynamic> attributes;
+
+  factory TrackingPositionDto.fromJson(Map<String, dynamic> json) {
+    return TrackingPositionDto(
+      id: _readInt(json, 'id'),
+      deviceId: _readInt(json, 'deviceId'),
+      latitude: _readDouble(json, 'latitude'),
+      longitude: _readDouble(json, 'longitude'),
+      speed: _readDouble(json, 'speed'),
+      attributes: _readAttributes(json['attributes']),
+    );
+  }
+
+  TrackingPosition toDomain() {
+    return TrackingPosition(
+      id: id,
+      deviceId: deviceId,
+      latitude: latitude,
+      longitude: longitude,
+      speed: speed,
+      attributes: attributes,
+    );
+  }
+
+  static int _readInt(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+
+    throw Failure(
+      message: 'La posición de Traccar no contiene $field válido.',
+      type: FailureType.traccar,
+    );
+  }
+
+  static double _readDouble(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    throw Failure(
+      message: 'La posición de Traccar no contiene $field válido.',
+      type: FailureType.traccar,
+    );
+  }
+
+  static Map<String, dynamic> _readAttributes(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return Map<String, dynamic>.unmodifiable(value);
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.unmodifiable(
+        Map<String, dynamic>.from(value),
+      );
+    }
+
+    throw const Failure(
+      message: 'La posición de Traccar no contiene atributos válidos.',
+      type: FailureType.traccar,
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\data\dtos\tracking_resource_dto.dart
+====================
+
+class TrackingResourceDto {
+  const TrackingResourceDto(this.data);
+
+  final Map<String, dynamic> data;
+
+  factory TrackingResourceDto.fromJson(Map<String, dynamic> json) {
+    return TrackingResourceDto(Map<String, dynamic>.unmodifiable(json));
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\data\repositories\tracking_repository_impl.dart
+====================
+
+import '../../domain/entities/tracking_device.dart';
+import '../../domain/entities/tracking_event.dart';
+import '../../domain/entities/tracking_position.dart';
+import '../../domain/repositories/tracking_repository.dart';
+import '../datasources/traccar_tracking_data_source.dart';
+import '../dtos/tracking_position_dto.dart';
+import '../dtos/tracking_resource_dto.dart';
+
+class TrackingRepositoryImpl implements TrackingRepository {
+  TrackingRepositoryImpl(this._dataSource);
+
+  final TraccarTrackingDataSource _dataSource;
+
+  @override
+  Future<List<TrackingDevice>> getDevices() async {
+    final data = await _dataSource.getDevices();
+    return data
+        .map(TrackingResourceDto.fromJson)
+        .map((dto) => TrackingDevice(dto.data))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<TrackingPosition>> getPositions() async {
+    final data = await _dataSource.getPositions();
+    return data
+        .map(TrackingPositionDto.fromJson)
+        .map((dto) => dto.toDomain())
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<TrackingEvent>> getEvents() async {
+    final data = await _dataSource.getEvents();
+    return data
+        .map(TrackingResourceDto.fromJson)
+        .map((dto) => TrackingEvent(dto.data))
+        .toList(growable: false);
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\domain\entities\tracking_device.dart
+====================
+
+class TrackingDevice {
+  const TrackingDevice(this.data);
+
+  /// Contrato sin campos tipados hasta recibir la respuesta de /devices.
+  final Map<String, dynamic> data;
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\domain\entities\tracking_event.dart
+====================
+
+class TrackingEvent {
+  const TrackingEvent(this.data);
+
+  /// Contrato sin campos tipados hasta recibir la respuesta de /events.
+  final Map<String, dynamic> data;
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\domain\entities\tracking_position.dart
+====================
+
+class TrackingPosition {
+  const TrackingPosition({
+    required this.id,
+    required this.deviceId,
+    required this.latitude,
+    required this.longitude,
+    required this.speed,
+    required this.attributes,
+  });
+
+  final int id;
+  final int deviceId;
+  final double latitude;
+  final double longitude;
+  final double speed;
+  final Map<String, dynamic> attributes;
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\domain\repositories\tracking_repository.dart
+====================
+
+import '../entities/tracking_device.dart';
+import '../entities/tracking_event.dart';
+import '../entities/tracking_position.dart';
+
+abstract class TrackingRepository {
+  Future<List<TrackingDevice>> getDevices();
+
+  Future<List<TrackingPosition>> getPositions();
+
+  Future<List<TrackingEvent>> getEvents();
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\tracking\providers\tracking_providers.dart
+====================
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/providers/core_providers.dart';
+import '../data/datasources/traccar_authorization_provider.dart';
+import '../data/datasources/traccar_tracking_data_source.dart';
+import '../data/repositories/tracking_repository_impl.dart';
+import '../domain/entities/tracking_device.dart';
+import '../domain/entities/tracking_event.dart';
+import '../domain/entities/tracking_position.dart';
+import '../domain/repositories/tracking_repository.dart';
+
+final traccarAuthorizationProvider =
+    Provider<TraccarAuthorizationProvider>((ref) {
+  return ConfiguredTraccarAuthorizationProvider(
+    ref.watch(appConfigProvider).traccarAuthorization,
+  );
+});
+
+final traccarTrackingDataSourceProvider = Provider<TraccarTrackingDataSource>((ref) {
+  return TraccarTrackingDataSource(
+    ref.watch(traccarDioProvider),
+    ref.watch(traccarAuthorizationProvider),
+  );
+});
+
+final trackingRepositoryProvider = Provider<TrackingRepository>((ref) {
+  return TrackingRepositoryImpl(ref.watch(traccarTrackingDataSourceProvider));
+});
+
+final trackingPositionsProvider =
+    AsyncNotifierProvider<TrackingPositionsNotifier, List<TrackingPosition>>(
+  TrackingPositionsNotifier.new,
+);
+
+class TrackingPositionsNotifier
+    extends AsyncNotifier<List<TrackingPosition>> {
+  @override
+  Future<List<TrackingPosition>> build() {
+    return ref.watch(trackingRepositoryProvider).getPositions();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(trackingRepositoryProvider).getPositions(),
+    );
+  }
+}
+
+final trackingDevicesProvider =
+    AsyncNotifierProvider<TrackingDevicesNotifier, List<TrackingDevice>>(
+  TrackingDevicesNotifier.new,
+);
+
+class TrackingDevicesNotifier extends AsyncNotifier<List<TrackingDevice>> {
+  @override
+  Future<List<TrackingDevice>> build() {
+    return ref.watch(trackingRepositoryProvider).getDevices();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(trackingRepositoryProvider).getDevices(),
+    );
+  }
+}
+
+final trackingEventsProvider =
+    AsyncNotifierProvider<TrackingEventsNotifier, List<TrackingEvent>>(
+  TrackingEventsNotifier.new,
+);
+
+class TrackingEventsNotifier extends AsyncNotifier<List<TrackingEvent>> {
+  @override
+  Future<List<TrackingEvent>> build() {
+    return ref.watch(trackingRepositoryProvider).getEvents();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(trackingRepositoryProvider).getEvents(),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\features\users\models\user_model.dart
+====================
+
+import '../../../core/constants/app_constants.dart';
+
+class UserModel {
+  final String id;
+  final String nombre;
+  final String usuario;
+  final String rol;
+  final bool isActive;
+
+  const UserModel({
+    required this.id,
+    required this.nombre,
+    required this.usuario,
+    required this.rol,
+    required this.isActive,
+  });
+
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id']?.toString() ?? '',
+      nombre: json['nombre']?.toString() ?? '',
+      usuario: json['usuario']?.toString() ?? '',
+      rol: json['rol']?.toString() ?? AppConstants.userRole,
+      isActive: json['activo'] == true,
+    );
+  }
+
+  bool get isAdmin => rol == AppConstants.adminRole;
+
+  bool get isSupervisor =>
+      rol == AppConstants.supervisorRole;
+
+  bool get isChofer =>
+      rol == AppConstants.choferRole;
+
+  bool get isUser =>
+      rol == AppConstants.userRole;
+
+  String get displayName {
+    if (nombre.trim().isNotEmpty) {
+      return nombre;
+    }
+
+    return usuario;
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\shared\models\api_response.dart
+====================
+
+class ApiResponse<T> {
+  final bool success;
+  final String message;
+  final T? data;
+
+  const ApiResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+
+  factory ApiResponse.success(T data, {String message = 'OK'}) {
+    return ApiResponse(
+      success: true,
+      message: message,
+      data: data,
+    );
+  }
+
+  factory ApiResponse.failure(String message) {
+    return ApiResponse(
+      success: false,
+      message: message,
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\shared\widgets\app_button.dart
+====================
+
+import 'package:flutter/material.dart';
+
+class AppButton extends StatelessWidget {
+  final String text;
+  final VoidCallback? onPressed;
+  final bool loading;
+  final IconData? icon;
+  final double? width;
+  final double? height;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final double borderRadius;
+
+  const AppButton({
+    super.key,
+    required this.text,
+    required this.onPressed,
+    this.loading = false,
+    this.icon,
+    this.width,
+    this.height = 52,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderRadius = 12,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      width: width ?? double.infinity,
+      height: height,
+      child: ElevatedButton.icon(
+        onPressed: loading ? null : onPressed,
+        icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
+        label: loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(text),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor ?? theme.colorScheme.primary,
+          foregroundColor: foregroundColor ?? Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(borderRadius),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\shared\widgets\app_card.dart
+====================
+
+import 'package:flutter/material.dart';
+
+class AppCard extends StatelessWidget {
+  const AppCard({
+    super.key,
+    required this.child,
+    this.maxWidth = 420,
+  });
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: maxWidth,
+      ),
+      child: Card(
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\shared\widgets\app_loading.dart
+====================
+
+import 'package:flutter/material.dart';
+
+class AppLoading extends StatelessWidget {
+  const AppLoading({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: CircularProgressIndicator(),
+    );
+  }
+}
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\shared\widgets\app_logo.dart
+====================
+
+import 'package:flutter/material.dart';
+
+class AppLogo extends StatelessWidget {
+  final double size;
+  const AppLogo({super.key, this.size = 100});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Image.asset(
+          'assets/images/logo.png',
+          width: size,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.local_shipping,
+              size: size,
+              color: Theme.of(context).colorScheme.primary,
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Fleet Control',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Sistema de Control de Flotas',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
+====================
+ARCHIVO: C:\Users\ivanm\fleet_control\lib\shared\widgets\app_text_field.dart
+====================
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+class AppTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final IconData? prefixIcon;
+  final Widget? suffixIcon;
+  final String? Function(String?)? validator;
+  final TextInputType keyboardType;
+  final TextInputAction textInputAction;
+  final bool obscureText;
+  final bool enabled;
+  final bool readOnly;
+  final VoidCallback? onTap;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onFieldSubmitted;
+  final int? maxLines;
+  final int? minLines;
+  final bool autofocus;
+  final FocusNode? focusNode;
+  final AutovalidateMode autovalidateMode;
+  final TextCapitalization textCapitalization;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
+
+  const AppTextField({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.prefixIcon,
+    this.suffixIcon,
+    this.validator,
+    this.keyboardType = TextInputType.text,
+    this.textInputAction = TextInputAction.done,
+    this.obscureText = false,
+    this.enabled = true,
+    this.readOnly = false,
+    this.onTap,
+    this.onChanged,
+    this.onFieldSubmitted,
+    this.maxLines = 1,
+    this.minLines,
+    this.autofocus = false,
+    this.focusNode,
+    this.autovalidateMode = AutovalidateMode.disabled,
+    this.textCapitalization = TextCapitalization.none,
+    this.inputFormatters,
+    this.maxLength,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      validator: validator,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      obscureText: obscureText,
+      enabled: enabled,
+      readOnly: readOnly,
+      onTap: onTap,
+      onChanged: onChanged,
+      onFieldSubmitted: onFieldSubmitted,
+      maxLines: maxLines,
+      minLines: minLines,
+      autofocus: autofocus,
+      focusNode: focusNode,
+      autovalidateMode: autovalidateMode,
+      textCapitalization: textCapitalization,
+      inputFormatters: inputFormatters,
+      maxLength: maxLength,
+      buildCounter: (
+        BuildContext context, {
+        required int currentLength,
+        required bool isFocused,
+        required int? maxLength,
+      }) {
+        return null; // 🔹 oculta el contador
+      },
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
+        suffixIcon: suffixIcon,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+}
+

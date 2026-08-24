@@ -7,7 +7,6 @@ class AdminDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const AppShell(
-      usuario: "Administrador",
       child: Center(
         child: Text(
           "Bienvenido, Administrador\nUsuarios: 25\nChoferes: 18\nVehículos: 12\nSupervisores: 4",

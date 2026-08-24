@@ -1,36 +1,40 @@
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
-import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';
 import 'interceptors/logging_interceptor.dart';
 
 class DioClient {
-  DioClient({
-    required AppConfig config,
-    required AuthInterceptor authInterceptor,
-  }) : _dio = Dio(
-          BaseOptions(
-            baseUrl: '${config.supabaseUrl}/rest/v1',
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
-            sendTimeout: const Duration(seconds: 15),
-            headers: {
-              'apikey': config.supabasePublishableKey,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          ),
-        ) {
-    _dio.interceptors.add(authInterceptor);
-    _dio.interceptors.add(ErrorInterceptor());
+  DioClient({required AppConfig config});
 
-    if (!config.isProduction) {
-      _dio.interceptors.add(LoggingInterceptor());
-    }
+  /// Crea el cliente de Traccar desde el único punto central de configuración.
+  /// No incluye encabezados ni tokens de Supabase para evitar filtrarlos a Traccar.
+  Dio createTraccarClient({
+    required String baseUrl,
+    required AppConfig config,
+  }) {
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+        headers: const {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    _addInterceptors(dio, config);
+    return dio;
   }
 
-  final Dio _dio;
+  void _addInterceptors(Dio dio, AppConfig config) {
+    dio.interceptors.add(ErrorInterceptor());
 
-  Dio get instance => _dio;
+    if (!config.isProduction) {
+      dio.interceptors.add(LoggingInterceptor());
+    }
+  }
 }

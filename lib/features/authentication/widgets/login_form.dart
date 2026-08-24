@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_text_field.dart';
 import '../providers/login_provider.dart';
-import '../providers/session_provider.dart';
-import '../models/user_session.dart';
 
 class LoginForm extends ConsumerStatefulWidget {
   const LoginForm({super.key});
@@ -17,62 +15,49 @@ class LoginForm extends ConsumerStatefulWidget {
 
 class _LoginFormState extends ConsumerState<LoginForm> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _usuarioController;
-  late TextEditingController _contrasenaController;
-  late FocusNode _usuarioFocus;
-  late FocusNode _contrasenaFocus;
+  late final TextEditingController _usuarioController;
+  late final TextEditingController _passwordController;
+  late final FocusNode _usuarioFocus;
+  late final FocusNode _passwordFocus;
 
   @override
   void initState() {
     super.initState();
     _usuarioController = TextEditingController();
-    _contrasenaController = TextEditingController();
+    _passwordController = TextEditingController();
     _usuarioFocus = FocusNode();
-    _contrasenaFocus = FocusNode();
+    _passwordFocus = FocusNode();
   }
 
   @override
   void dispose() {
     _usuarioController.dispose();
-    _contrasenaController.dispose();
+    _passwordController.dispose();
     _usuarioFocus.dispose();
-    _contrasenaFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
   void _clearError() {
-    final state = ref.read(loginProvider);
-    if (state.errorMessage != null) {
+    if (ref.read(loginProvider).errorMessage != null) {
       ref.read(loginProvider.notifier).clearError();
     }
   }
 
   Future<void> _submit() async {
     final loginNotifier = ref.read(loginProvider.notifier);
-    final loginState = ref.read(loginProvider);
+    if (ref.read(loginProvider).isLoading ||
+        !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
 
-    if (loginState.isLoading) return;
+    final result = await loginNotifier.login(
+      usuario: _usuarioController.text.trim(),
+      password: _passwordController.text,
+    );
 
-    if (_formKey.currentState?.validate() ?? false) {
-      final result = await loginNotifier.login(
-        username: _usuarioController.text.trim(),
-        password: _contrasenaController.text,
-      );
-
-      if (!mounted) return;
-
-      if (result.isSuccess && result.user != null) {
-        // Guardar sesión
-        ref.read(sessionProvider.notifier).setSession(
-          UserSession(
-            user: result.user!,
-            loginAt: DateTime.now(),
-          ),
-        );
-
-        // Navegar a /app → GoRouter decide destino según rol
-        context.go('/app');
-      }
+    if (mounted && result.isSuccess) {
+      context.go('/home');
     }
   }
 
@@ -88,29 +73,29 @@ class _LoginFormState extends ConsumerState<LoginForm> {
           AppTextField(
             controller: _usuarioController,
             label: 'Usuario',
-            hint: 'Ingrese su usuario',
-            prefixIcon: Icons.person,
+            hint: 'Ingresa tu usuario',
+            prefixIcon: Icons.person_outline,
             focusNode: _usuarioFocus,
             textInputAction: TextInputAction.next,
             autofocus: true,
             enabled: !loginState.isLoading,
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
+              if ((value?.trim() ?? '').isEmpty) {
                 return 'El usuario es obligatorio';
               }
               return null;
             },
             onFieldSubmitted: (_) {
-              FocusScope.of(context).requestFocus(_contrasenaFocus);
+              FocusScope.of(context).requestFocus(_passwordFocus);
             },
             onChanged: (_) => _clearError(),
           ),
           const SizedBox(height: 16),
           AppTextField(
-            controller: _contrasenaController,
+            controller: _passwordController,
             label: 'Contraseña',
-            hint: 'Ingrese su contraseña',
-            prefixIcon: Icons.lock,
+            hint: 'Ingresa tu contraseña',
+            prefixIcon: Icons.lock_outline,
             suffixIcon: IconButton(
               icon: Icon(
                 loginState.obscurePassword
@@ -119,20 +104,14 @@ class _LoginFormState extends ConsumerState<LoginForm> {
               ),
               onPressed: loginState.isLoading
                   ? null
-                  : () {
-                      ref.read(loginProvider.notifier)
-                          .togglePasswordVisibility();
-                    },
+                  : ref.read(loginProvider.notifier).togglePasswordVisibility,
             ),
-            focusNode: _contrasenaFocus,
+            focusNode: _passwordFocus,
             obscureText: loginState.obscurePassword,
             enabled: !loginState.isLoading,
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
+              if (value == null || value.isEmpty) {
                 return 'La contraseña es obligatoria';
-              }
-              if (value.length < 4) {
-                return 'Debe tener al menos 4 caracteres';
               }
               return null;
             },
@@ -145,6 +124,13 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             onPressed: loginState.isLoading ? null : _submit,
             loading: loginState.isLoading,
             icon: Icons.login,
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: loginState.isLoading
+                ? null
+                : () => _showPasswordHelp(context),
+            child: const Text('¿Olvidaste tu contraseña?'),
           ),
           if (loginState.errorMessage != null) ...[
             const SizedBox(height: 12),
@@ -168,6 +154,24 @@ class _LoginFormState extends ConsumerState<LoginForm> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showPasswordHelp(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recuperación de contraseña'),
+        content: const Text(
+          'Solicita a tu supervisor el restablecimiento de tu contraseña.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('CERRAR'),
+          ),
         ],
       ),
     );

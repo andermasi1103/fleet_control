@@ -1,34 +1,49 @@
-import '../models/user_session.dart';
-import '../../../core/constants/app_constants.dart';
+import '../domain/entities/auth_session.dart';
+
+enum SessionStatus {
+  initializing,
+  authenticated,
+  unauthenticated,
+  failure,
+}
 
 class SessionState {
-  final UserSession? session;
+  const SessionState._({
+    required this.status,
+    this.session,
+    this.errorMessage,
+  });
 
-  const SessionState({this.session});
+  const SessionState.initializing()
+      : this._(status: SessionStatus.initializing);
 
-  bool get isAuthenticated => session != null;
+  const SessionState.authenticated(AuthSession session)
+      : this._(
+          status: SessionStatus.authenticated,
+          session: session,
+        );
 
-  bool get isAdmin =>
-      session?.user.rol == AppConstants.adminRole;
+  const SessionState.unauthenticated({String? errorMessage})
+      : this._(
+          status: SessionStatus.unauthenticated,
+          errorMessage: errorMessage,
+        );
 
-  bool get isSupervisor =>
-      session?.user.rol == AppConstants.supervisorRole;
+  const SessionState.failure(String errorMessage)
+      : this._(
+          status: SessionStatus.failure,
+          errorMessage: errorMessage,
+        );
 
-  bool get isChofer =>
-      session?.user.rol == AppConstants.choferRole;
+  final SessionStatus status;
+  final AuthSession? session;
+  final String? errorMessage;
 
-  bool get isUser =>
-      session?.user.rol == AppConstants.userRole;
+  bool get isAuthenticated => status == SessionStatus.authenticated;
 
-  SessionState copyWith({
-    Object? session = _sentinel,
-  }) {
-    return SessionState(
-      session: identical(session, _sentinel)
-          ? this.session
-          : session as UserSession?,
-    );
-  }
+  bool get isInitializing => status == SessionStatus.initializing;
 
-  static const _sentinel = Object();
+  bool get isUnauthenticated => status == SessionStatus.unauthenticated;
+
+  bool get hasError => errorMessage != null;
 }

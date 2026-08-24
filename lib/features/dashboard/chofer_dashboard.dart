@@ -7,7 +7,6 @@ class ChoferDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const AppShell(
-      usuario: "Chofer",
       child: Center(
         child: Text(
           "Bienvenido, Chofer\n\nEstado: Disponible\n\n[ Marcar entrada ]\n[ Mi ubicación ]",

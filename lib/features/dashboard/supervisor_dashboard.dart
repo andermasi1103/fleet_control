@@ -8,7 +8,6 @@ class SupervisorDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const AppShell(
-      usuario: 'Supervisor',
       child: Center(
         child: Text(
           'Bienvenido, Supervisor\n\n'

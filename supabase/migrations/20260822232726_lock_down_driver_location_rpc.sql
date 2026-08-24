@@ -1,0 +1,2 @@
+revoke all on function public.fleet_control_update_driver_location(uuid, double precision, double precision, double precision, double precision, double precision, timestamptz) from public, anon, authenticated;
+grant execute on function public.fleet_control_update_driver_location(uuid, double precision, double precision, double precision, double precision, double precision, timestamptz) to service_role;
