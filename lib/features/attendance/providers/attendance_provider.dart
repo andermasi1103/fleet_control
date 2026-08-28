@@ -11,7 +11,7 @@ import '../data/dtos/location_dto.dart';
 import 'attendance_state.dart';
 
 final attendanceDataSourceProvider = Provider<AttendanceDataSource>((ref) {
-  return AttendanceDataSource(ref.watch(supabaseClientProvider));
+  return AttendanceDataSource(ref.watch(backendApiClientProvider));
 });
 
 final locationServiceProvider = Provider<LocationService>((ref) {

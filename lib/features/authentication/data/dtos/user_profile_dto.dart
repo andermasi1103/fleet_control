@@ -22,12 +22,13 @@ class UserProfileDto {
   factory UserProfileDto.fromJson(Map<String, dynamic> json) {
     return UserProfileDto(
       id: json['id']?.toString() ?? '',
-      empresaId: json['empresa_id']?.toString(),
-      roleId: json['rol_id']?.toString() ?? '',
-      role: json['rol']?.toString() ?? '',
+      empresaId:
+          json['empresaId']?.toString() ?? json['empresa_id']?.toString(),
+      roleId: json['roleId']?.toString() ?? json['rol_id']?.toString() ?? '',
+      role: json['rolCodigo']?.toString() ?? json['rol']?.toString() ?? '',
       nombre: json['nombre']?.toString() ?? '',
       usuario: json['usuario']?.toString() ?? '',
-      isActive: json['activo'] == true,
+      isActive: json['activo'] != false,
     );
   }
 

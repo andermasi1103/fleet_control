@@ -63,14 +63,12 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
       _currentPasswordController.clear();
       _newPasswordController.clear();
       _confirmPasswordController.clear();
-      ref.read(sessionProvider.notifier).localSignOut();
+      ref.read(sessionProvider.notifier).endSessionAfterPasswordChange();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Contraseña actualizada correctamente. Inicia sesión nuevamente.',
-          ),
+          content: Text('Contraseña actualizada. Inicia sesión nuevamente.'),
         ),
       );
       context.go('/login');

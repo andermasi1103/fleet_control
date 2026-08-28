@@ -1,19 +1,25 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../core/errors/failure.dart';
+import '../../../core/network/api_client.dart';
 
-enum ReportType { orders, managements, attendance, drivers, vehicles, locations }
+enum ReportType {
+  orders,
+  managements,
+  attendance,
+  drivers,
+  vehicles,
+  locations,
+}
 
 extension ReportTypeX on ReportType {
   String get value => name;
   String get label => switch (this) {
-        ReportType.orders => 'Pedidos',
-        ReportType.managements => 'Gestiones',
-        ReportType.attendance => 'Asistencias',
-        ReportType.drivers => 'Choferes',
-        ReportType.vehicles => 'Vehículos',
-        ReportType.locations => 'Locales',
-      };
+    ReportType.orders => 'Pedidos',
+    ReportType.managements => 'Gestiones',
+    ReportType.attendance => 'Asistencias',
+    ReportType.drivers => 'Choferes',
+    ReportType.vehicles => 'Vehículos',
+    ReportType.locations => 'Locales',
+  };
 }
 
 class ReportResult {
@@ -24,7 +30,7 @@ class ReportResult {
 
 class ReportsDataSource {
   ReportsDataSource(this._client);
-  final SupabaseClient _client;
+  final ApiClient _client;
 
   Future<ReportResult> load({
     required String token,
@@ -37,12 +43,10 @@ class ReportsDataSource {
     String? priority,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        'reports-data',
-        method: HttpMethod.get,
-        headers: {'Authorization': 'Bearer $token'},
+      final response = await _client.get<Map<String, dynamic>>(
+        '/api/reports/${type.value}',
+        bearerToken: token,
         queryParameters: {
-          'type': type.value,
           if (from != null) 'desde': from.toUtc().toIso8601String(),
           if (until != null) 'hasta': until.toUtc().toIso8601String(),
           'empresa_id': ?companyId,
@@ -58,15 +62,18 @@ class ReportsDataSource {
         type: type,
         rows: rows.map((row) => Map<String, dynamic>.from(row as Map)).toList(),
       );
-    } on FunctionException catch (error) {
-      final message = error.status == 422
+    } on ApiException catch (error) {
+      final message = error.statusCode == 422
           ? 'El reporte supera el límite permitido. Reduce el rango de fechas.'
-          : error.status == 403
+          : error.statusCode == 403
           ? 'No tienes permiso para generar reportes.'
           : 'No fue posible generar el reporte.';
-      throw Failure(message: message, type: FailureType.supabase);
+      throw Failure(message: message, type: FailureType.backend);
     } catch (_) {
-      throw const Failure(message: 'No fue posible generar el reporte.', type: FailureType.supabase);
+      throw const Failure(
+        message: 'No fue posible generar el reporte.',
+        type: FailureType.backend,
+      );
     }
   }
 }

@@ -10,7 +10,7 @@ import '../data/dtos/location_import_dto.dart';
 import 'locations_state.dart';
 
 final locationsDataSourceProvider = Provider<LocationsDataSource>((ref) {
-  return LocationsDataSource(ref.watch(supabaseClientProvider));
+  return LocationsDataSource(ref.watch(backendApiClientProvider));
 });
 
 final locationsProvider = NotifierProvider<LocationsNotifier, LocationsState>(
@@ -155,9 +155,15 @@ class LocationsNotifier extends Notifier<LocationsState> {
       _sessionFailure();
       return null;
     }
-    state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
+    state = state.copyWith(
+      isSaving: true,
+      clearError: true,
+      clearSuccess: true,
+    );
     try {
-      final imported = await ref.read(locationsDataSourceProvider).importLocations(
+      final imported = await ref
+          .read(locationsDataSourceProvider)
+          .importLocations(
             sessionToken: token,
             companyId: companyId,
             locations: locations,

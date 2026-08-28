@@ -36,6 +36,7 @@ import '../features/orders/presentation/order_descriptions_screen.dart';
 import '../features/orders/presentation/orders_screen.dart';
 import '../features/managements/presentation/managements_screen.dart';
 import '../features/managements/presentation/assign_management_screen.dart';
+import '../features/notifications/presentation/notifications_screen.dart';
 import '../shared/widgets/app_loading.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -166,6 +167,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/driver-orders',
         builder: (context, state) => const DriverOrdersScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: '/managements',

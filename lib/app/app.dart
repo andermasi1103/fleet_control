@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_router.dart';
 import 'theme.dart';
 import '../features/tracking/providers/driver_tracking_provider.dart';
+import '../features/driver_orders/providers/driver_orders_provider.dart';
+import '../features/notifications/providers/notifications_provider.dart';
+import '../features/authentication/providers/session_provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class FleetControlApp extends ConsumerStatefulWidget {
   const FleetControlApp({super.key});
@@ -19,6 +23,10 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ref.read(driverTrackingProvider);
+    Future.microtask(() => ref.read(pushNotificationServiceProvider).start(
+          onForegroundMessage: _handleForegroundMessage,
+          onNotificationOpened: _handleNotificationOpened,
+        ));
   }
 
   @override
@@ -32,6 +40,31 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
     ref.read(driverTrackingProvider.notifier).handleLifecycleChange(state);
   }
 
+  void _handleForegroundMessage(RemoteMessage message) {
+    if (message.data['type'] != 'new_order') return;
+    ref.read(notificationsProvider.notifier).load();
+    ref.read(driverOrdersProvider.notifier).load();
+    final messenger = _messengerKey.currentState;
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Nuevo pedido disponible'),
+          action: SnackBarAction(
+            label: 'VER PEDIDOS',
+            onPressed: () => ref.read(routerProvider).go('/driver-orders'),
+          ),
+        ),
+      );
+  }
+
+  void _handleNotificationOpened(RemoteMessage message) {
+    if (message.data['type'] == 'new_order' &&
+        ref.read(sessionProvider).isAuthenticated) {
+      ref.read(routerProvider).go('/driver-orders');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
@@ -40,7 +73,10 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
       title: 'Fleet Control',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      scaffoldMessengerKey: _messengerKey,
       routerConfig: router,
     );
   }
 }
+
+final _messengerKey = GlobalKey<ScaffoldMessengerState>();

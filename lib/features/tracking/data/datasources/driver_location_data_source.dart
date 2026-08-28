@@ -1,24 +1,22 @@
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 
 class DriverLocationDataSource {
   DriverLocationDataSource(this._client);
 
-  final SupabaseClient _client;
+  final ApiClient _client;
 
   Future<void> updateLocation({
     required String sessionToken,
     required Position position,
   }) async {
     try {
-      await _client.functions.invoke(
-        'driver-location-update',
-        method: HttpMethod.post,
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: {
+      await _client.post<Map<String, dynamic>>(
+        '/api/driver/location',
+        bearerToken: sessionToken,
+        data: {
           'latitude': position.latitude,
           'longitude': position.longitude,
           'accuracy': _nonNegativeFinite(position.accuracy),
@@ -27,11 +25,8 @@ class DriverLocationDataSource {
           'captured_at': DateTime.now().toUtc().toIso8601String(),
         },
       );
-    } on FunctionException catch (error) {
-      if (kDebugMode) {
-        debugPrint('driver-location update failed: status=${error.status}');
-      }
-      throw _failureFor(error.status);
+    } on ApiException catch (error) {
+      throw _failureFor(error.statusCode ?? 0);
     } on Failure {
       rethrow;
     } catch (_) {
@@ -62,7 +57,7 @@ class DriverLocationDataSource {
         return const Failure(
           message: 'La ubicación recibida no es válida.',
           statusCode: 400,
-          type: FailureType.supabase,
+          type: FailureType.network,
         );
       case 401:
         return const Failure(
@@ -80,7 +75,7 @@ class DriverLocationDataSource {
         return Failure(
           message: 'No fue posible actualizar tu ubicación.',
           statusCode: statusCode,
-          type: FailureType.supabase,
+          type: FailureType.network,
         );
     }
   }

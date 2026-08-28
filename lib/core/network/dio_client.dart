@@ -7,15 +7,11 @@ import 'interceptors/logging_interceptor.dart';
 class DioClient {
   DioClient({required AppConfig config});
 
-  /// Crea el cliente de Traccar desde el único punto central de configuración.
-  /// No incluye encabezados ni tokens de Supabase para evitar filtrarlos a Traccar.
-  Dio createTraccarClient({
-    required String baseUrl,
-    required AppConfig config,
-  }) {
+  /// Cliente único para los endpoints Fastify de Fleet Control.
+  Dio createBackendClient({required AppConfig config}) {
     final dio = Dio(
       BaseOptions(
-        baseUrl: baseUrl,
+        baseUrl: config.backendApiBaseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
         sendTimeout: const Duration(seconds: 15),

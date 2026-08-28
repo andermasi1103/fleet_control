@@ -7,7 +7,7 @@ import '../data/datasources/orders_data_source.dart';
 import '../data/dtos/order_dto.dart';
 
 final ordersDataSourceProvider = Provider(
-  (ref) => OrdersDataSource(ref.watch(supabaseClientProvider)),
+  (ref) => OrdersDataSource(ref.watch(backendApiClientProvider)),
 );
 final ordersProvider = NotifierProvider<OrdersNotifier, OrdersState>(
   OrdersNotifier.new,

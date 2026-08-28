@@ -10,7 +10,7 @@ import '../app_view_code.dart';
 import '../data/datasources/role_views_data_source.dart';
 
 final roleViewsDataSourceProvider = Provider<RoleViewsGateway>((ref) {
-  return RoleViewsDataSource(ref.watch(supabaseClientProvider));
+  return RoleViewsDataSource(ref.watch(backendApiClientProvider));
 });
 
 class CurrentUserViewsState {

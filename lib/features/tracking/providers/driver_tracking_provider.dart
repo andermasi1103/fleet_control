@@ -38,7 +38,7 @@ class DriverTrackingState {
 final driverLocationDataSourceProvider = Provider<DriverLocationDataSource>((
   ref,
 ) {
-  return DriverLocationDataSource(ref.watch(supabaseClientProvider));
+  return DriverLocationDataSource(ref.watch(backendApiClientProvider));
 });
 
 final driverTrackingServiceProvider = Provider<DriverTrackingService>((ref) {
@@ -67,8 +67,22 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
   @override
   DriverTrackingState build() {
     ref.listen(sessionProvider, (_, next) {
-      unawaited(_synchronizeSession(next.session));
+      if (ref.read(postLoginBootstrapProvider)) {
+        unawaited(_synchronizeSession(next.session));
+      }
     });
+    ref.listen(postLoginBootstrapProvider, (_, isReady) {
+      if (isReady) {
+        unawaited(_synchronizeSession(ref.read(sessionProvider).session));
+      } else {
+        unawaited(_stop(setIdleState: true));
+      }
+    });
+    if (ref.read(postLoginBootstrapProvider)) {
+      Future.microtask(
+        () => _synchronizeSession(ref.read(sessionProvider).session),
+      );
+    }
     ref.onDispose(_dispose);
     return const DriverTrackingState();
   }
@@ -76,7 +90,9 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
   Future<void> handleLifecycleChange(AppLifecycleState lifecycleState) async {
     if (lifecycleState == AppLifecycleState.resumed) {
       _isInForeground = true;
-      await _synchronizeSession(ref.read(sessionProvider).session);
+      if (ref.read(postLoginBootstrapProvider)) {
+        await _synchronizeSession(ref.read(sessionProvider).session);
+      }
       return;
     }
 

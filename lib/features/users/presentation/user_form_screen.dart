@@ -8,6 +8,8 @@ import '../../user_vehicles/data/dtos/user_vehicle_dto.dart';
 import '../data/dtos/user_dto.dart';
 import '../providers/users_provider.dart';
 import '../providers/users_state.dart';
+import '../providers/supervisor_drivers_provider.dart';
+import 'supervisor_drivers_section.dart';
 import '../../user_vehicles/providers/user_vehicles_provider.dart';
 
 class UserFormScreen extends ConsumerStatefulWidget {
@@ -32,6 +34,8 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
   bool _obscurePasswordConfirmation = true;
   bool _isSubmitting = false;
   bool _hasRequestedHabitualVehicle = false;
+  bool _hasRequestedSupervisorDrivers = false;
+  bool _isSavingSupervisorDrivers = false;
 
   bool get _isEditing => widget.initialUser != null;
 
@@ -75,6 +79,9 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
     final isDriver =
         _isEditing &&
         (selectedRoleCode ?? widget.initialUser?.role) == 'chofer';
+    final isSupervisor =
+        _isEditing &&
+        (selectedRoleCode ?? widget.initialUser?.role) == 'supervisor';
     if (isDriver && !_hasRequestedHabitualVehicle) {
       _hasRequestedHabitualVehicle = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -84,6 +91,19 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
       });
     }
     final userVehicleState = ref.watch(userVehicleProvider);
+    final supervisorDrivers = isSupervisor
+        ? ref.watch(supervisorDriversProvider(widget.initialUser!.id))
+        : null;
+    if (isSupervisor && !_hasRequestedSupervisorDrivers) {
+      _hasRequestedSupervisorDrivers = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref
+              .read(supervisorDriversProvider(widget.initialUser!.id).notifier)
+              .load();
+        }
+      });
+    }
     _selectOnlyOption(state.companies.length, roles.length, state);
 
     return AppShell(
@@ -255,6 +275,28 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                           : () => _updateHabitualVehicle(null),
                     ),
                   ],
+                  if (isSupervisor) ...[
+                    const SizedBox(height: 24),
+                    SupervisorDriversSection(
+                      data: supervisorDrivers,
+                      isSaving: _isSavingSupervisorDrivers,
+                      onChanged: (id, selected) => ref
+                          .read(
+                            supervisorDriversProvider(
+                              widget.initialUser!.id,
+                            ).notifier,
+                          )
+                          .toggle(id, selected),
+                      onSave: _saveSupervisorDrivers,
+                      onRetry: () => ref
+                          .read(
+                            supervisorDriversProvider(
+                              widget.initialUser!.id,
+                            ).notifier,
+                          )
+                          .load(),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   Wrap(
                     alignment: WrapAlignment.end,
@@ -406,6 +448,26 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
+        backgroundColor: success ? null : Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _saveSupervisorDrivers() async {
+    if (_isSavingSupervisorDrivers) return;
+    setState(() => _isSavingSupervisorDrivers = true);
+    final success = await ref
+        .read(supervisorDriversProvider(widget.initialUser!.id).notifier)
+        .save();
+    if (!mounted) return;
+    setState(() => _isSavingSupervisorDrivers = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Choferes asignados correctamente.'
+              : 'No fue posible guardar los choferes asignados.',
+        ),
         backgroundColor: success ? null : Theme.of(context).colorScheme.error,
       ),
     );

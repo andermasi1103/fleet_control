@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../authentication/providers/session_provider.dart';
+import '../notifications/providers/notifications_provider.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({
@@ -20,11 +21,21 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userName = ref.watch(sessionProvider).session?.user.displayName ??
         'Usuario';
+    final unreadCount = ref.watch(notificationsProvider).unreadCount;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
         actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            tooltip: 'Notificaciones',
+            onPressed: () => context.go('/notifications'),
+          ),
           if (showHomeAction)
             IconButton(
               icon: const Icon(Icons.home_outlined),

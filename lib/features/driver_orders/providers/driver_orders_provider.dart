@@ -8,7 +8,7 @@ import '../data/datasources/driver_orders_data_source.dart';
 import '../data/dtos/available_order_dto.dart';
 
 final driverOrdersDataSourceProvider = Provider(
-  (ref) => DriverOrdersDataSource(ref.watch(supabaseClientProvider)),
+  (ref) => DriverOrdersDataSource(ref.watch(backendApiClientProvider)),
 );
 
 final driverOrdersProvider =

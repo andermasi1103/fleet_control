@@ -7,7 +7,7 @@ import '../data/datasources/companies_data_source.dart';
 import 'companies_state.dart';
 
 final companiesDataSourceProvider = Provider<CompaniesDataSource>((ref) {
-  return CompaniesDataSource(ref.watch(supabaseClientProvider));
+  return CompaniesDataSource(ref.watch(backendApiClientProvider));
 });
 
 final companiesProvider = NotifierProvider<CompaniesNotifier, CompaniesState>(

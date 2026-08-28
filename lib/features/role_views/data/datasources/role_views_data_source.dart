@@ -1,14 +1,11 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../../app_view_code.dart';
 import '../dtos/role_views_dto.dart';
 
 abstract class RoleViewsGateway {
   Future<Set<AppViewCode>> getMyViews({required String sessionToken});
-
   Future<RoleViewsMatrixDto> getMatrix({required String sessionToken});
-
   Future<void> updateView({
     required String sessionToken,
     required String roleCode,
@@ -18,46 +15,47 @@ abstract class RoleViewsGateway {
 }
 
 class RoleViewsDataSource implements RoleViewsGateway {
-  RoleViewsDataSource(this._client);
-
-  final SupabaseClient _client;
-
+  RoleViewsDataSource(this._apiClient);
+  final ApiClient _apiClient;
   @override
   Future<Set<AppViewCode>> getMyViews({required String sessionToken}) async {
-    final response = await _invoke(
-      'my-views',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-    );
-    final values = response['views'];
-    if (values is! List) {
+    try {
+      final values = (await _apiClient.get<Map<String, dynamic>>(
+        '/api/me/views',
+        bearerToken: sessionToken,
+      )).data?['views'];
+      if (values is! List) {
+        throw const FormatException();
+      }
+      return AppViewCode.fromValues(values);
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible cargar las vistas disponibles.',
+      );
+    } on FormatException {
       throw const Failure(
         message: 'La configuración de vistas no es válida.',
-        type: FailureType.supabase,
+        type: FailureType.network,
       );
     }
-    return AppViewCode.fromValues(values);
   }
 
   @override
-  Future<RoleViewsMatrixDto> getMatrix({
-    required String sessionToken,
-  }) async {
-    final response = await _invoke(
-      'role-views-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-    );
-    final roles = response['roles'];
-    final views = response['views'];
-    final assignments = response['role_views'];
-    if (roles is! List || views is! List || assignments is! List) {
-      throw const Failure(
-        message: 'La matriz de vistas no es válida.',
-        type: FailureType.supabase,
-      );
-    }
+  Future<RoleViewsMatrixDto> getMatrix({required String sessionToken}) async {
     try {
+      final body =
+          (await _apiClient.get<Map<String, dynamic>>(
+            '/api/role-views',
+            bearerToken: sessionToken,
+          )).data ??
+          {};
+      final roles = body['roles'];
+      final views = body['views'];
+      final assignments = body['role_views'];
+      if (roles is! List || views is! List || assignments is! List) {
+        throw const FormatException();
+      }
       return RoleViewsMatrixDto(
         roles: roles.map((item) => RoleDto.fromJson(_map(item))).toList(),
         views: views.map((item) => AppViewDto.fromJson(_map(item))).toList(),
@@ -65,10 +63,15 @@ class RoleViewsDataSource implements RoleViewsGateway {
             .map((item) => RoleViewDto.fromJson(_map(item)))
             .toList(),
       );
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible cargar la configuración de vistas.',
+      );
     } on FormatException {
       throw const Failure(
         message: 'La matriz de vistas no es válida.',
-        type: FailureType.supabase,
+        type: FailureType.network,
       );
     }
   }
@@ -80,68 +83,56 @@ class RoleViewsDataSource implements RoleViewsGateway {
     required String viewCode,
     required bool visible,
   }) async {
-    await _invoke(
-      'role-view-update',
-      sessionToken: sessionToken,
-      method: HttpMethod.patch,
-      body: {
-        'role_code': roleCode,
-        'view_code': viewCode,
-        'visible': visible,
-      },
-    );
+    try {
+      await _apiClient.patch<Map<String, dynamic>>(
+        '/api/role-views',
+        bearerToken: sessionToken,
+        data: {
+          'role_code': roleCode,
+          'view_code': viewCode,
+          'visible': visible,
+        },
+      );
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible guardar la configuración de vistas.',
+        code: error.code,
+      );
+    }
   }
 
-  Future<Map<String, dynamic>> _invoke(
-    String functionName, {
-    required String sessionToken,
-    required HttpMethod method,
-    Map<String, dynamic>? body,
-  }) async {
-    try {
-      final response = await _client.functions.invoke(
-        functionName,
-        method: method,
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: body,
-      );
-      return _map(response.data);
-    } on FunctionException catch (error) {
-      throw Failure(
-        message: _messageFor(error.status, error.details),
-        statusCode: error.status,
-        type: error.status == 401
-            ? FailureType.sessionExpired
-            : error.status == 403
-            ? FailureType.insufficientPermissions
-            : FailureType.supabase,
-      );
-    } on Failure {
-      rethrow;
-    } catch (_) {
-      throw const Failure(
-        message: 'No fue posible cargar la configuración de vistas.',
+  Failure _failure(int? status, String fallback, {String? code}) {
+    if (code == 'protected_view' || status == 400) {
+      return const Failure(
+        message: 'Esta vista protegida no se puede desactivar.',
         type: FailureType.network,
       );
     }
-  }
-
-  String _messageFor(int status, Object? details) {
-    final code = details is Map ? details['error'] : null;
-    if (code == 'protected_view') {
-      return 'Esta vista protegida no se puede desactivar.';
-    }
     return switch (status) {
-      401 => 'Tu sesión ha vencido. Inicia sesión nuevamente.',
-      403 => 'No tienes permiso para administrar las vistas por rol.',
-      404 => 'El rol o la vista ya no están disponibles.',
-      _ => 'No fue posible guardar la configuración de vistas.',
+      401 => const Failure(
+        message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
+        type: FailureType.sessionExpired,
+      ),
+      403 => const Failure(
+        message: 'No tienes permiso para administrar las vistas por rol.',
+        type: FailureType.insufficientPermissions,
+      ),
+      404 => const Failure(
+        message: 'El rol o la vista ya no están disponibles.',
+        type: FailureType.network,
+      ),
+      _ => Failure(message: fallback, type: FailureType.network),
     };
   }
 
   Map<String, dynamic> _map(Object? value) {
-    if (value is Map<String, dynamic>) return value;
-    if (value is Map) return Map<String, dynamic>.from(value);
-    throw const FormatException('Respuesta inválida.');
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    throw const FormatException();
   }
 }

@@ -14,8 +14,12 @@ class LoginResponseDto {
   final DateTime expiresAt;
 
   factory LoginResponseDto.fromJson(Map<String, dynamic> json) {
-    final token = json['session_token']?.toString() ?? '';
-    final expiresAtValue = json['expires_at']?.toString();
+    final token =
+        json['sessionToken']?.toString() ??
+        json['session_token']?.toString() ??
+        '';
+    final expiresAtValue =
+        json['expiresAt']?.toString() ?? json['expires_at']?.toString();
     final expiresAt = expiresAtValue == null
         ? null
         : DateTime.tryParse(expiresAtValue);
@@ -25,9 +29,7 @@ class LoginResponseDto {
       throw const FormatException('Respuesta de login inválida.');
     }
 
-    final user = UserProfileDto.fromJson(
-      Map<String, dynamic>.from(userValue),
-    );
+    final user = UserProfileDto.fromJson(Map<String, dynamic>.from(userValue));
     if (user.id.isEmpty || user.usuario.isEmpty || user.roleId.isEmpty) {
       throw const FormatException('Perfil de usuario inválido.');
     }

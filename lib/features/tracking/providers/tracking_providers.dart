@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/core_providers.dart';
-import '../data/datasources/traccar_authorization_provider.dart';
+import '../../authentication/providers/session_provider.dart';
 import '../data/datasources/traccar_tracking_data_source.dart';
 import '../data/repositories/tracking_repository_impl.dart';
 import '../domain/entities/tracking_device.dart';
@@ -9,18 +9,16 @@ import '../domain/entities/tracking_event.dart';
 import '../domain/entities/tracking_position.dart';
 import '../domain/repositories/tracking_repository.dart';
 
-final traccarAuthorizationProvider =
-    Provider<TraccarAuthorizationProvider>((ref) {
-  return ConfiguredTraccarAuthorizationProvider(
-    ref.watch(appConfigProvider).traccarAuthorization,
-  );
-});
-
-final traccarTrackingDataSourceProvider = Provider<TraccarTrackingDataSource>((ref) {
-  return TraccarTrackingDataSource(
-    ref.watch(traccarDioProvider),
-    ref.watch(traccarAuthorizationProvider),
-  );
+final traccarTrackingDataSourceProvider = Provider<TraccarTrackingDataSource>((
+  ref,
+) {
+  return TraccarTrackingDataSource(ref.watch(backendApiClientProvider), () {
+    final session = ref.read(sessionProvider).session;
+    if (session == null || session.isExpired || session.sessionToken.isEmpty) {
+      throw StateError('Sesión inválida o expirada.');
+    }
+    return session.sessionToken;
+  });
 });
 
 final trackingRepositoryProvider = Provider<TrackingRepository>((ref) {
@@ -29,11 +27,10 @@ final trackingRepositoryProvider = Provider<TrackingRepository>((ref) {
 
 final trackingPositionsProvider =
     AsyncNotifierProvider<TrackingPositionsNotifier, List<TrackingPosition>>(
-  TrackingPositionsNotifier.new,
-);
+      TrackingPositionsNotifier.new,
+    );
 
-class TrackingPositionsNotifier
-    extends AsyncNotifier<List<TrackingPosition>> {
+class TrackingPositionsNotifier extends AsyncNotifier<List<TrackingPosition>> {
   @override
   Future<List<TrackingPosition>> build() {
     return ref.watch(trackingRepositoryProvider).getPositions();
@@ -49,8 +46,8 @@ class TrackingPositionsNotifier
 
 final trackingDevicesProvider =
     AsyncNotifierProvider<TrackingDevicesNotifier, List<TrackingDevice>>(
-  TrackingDevicesNotifier.new,
-);
+      TrackingDevicesNotifier.new,
+    );
 
 class TrackingDevicesNotifier extends AsyncNotifier<List<TrackingDevice>> {
   @override
@@ -68,8 +65,8 @@ class TrackingDevicesNotifier extends AsyncNotifier<List<TrackingDevice>> {
 
 final trackingEventsProvider =
     AsyncNotifierProvider<TrackingEventsNotifier, List<TrackingEvent>>(
-  TrackingEventsNotifier.new,
-);
+      TrackingEventsNotifier.new,
+    );
 
 class TrackingEventsNotifier extends AsyncNotifier<List<TrackingEvent>> {
   @override

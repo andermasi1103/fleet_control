@@ -8,7 +8,7 @@ import '../data/datasources/vehicles_data_source.dart';
 import 'vehicles_state.dart';
 
 final vehiclesDataSourceProvider = Provider<VehiclesDataSource>(
-  (ref) => VehiclesDataSource(ref.watch(supabaseClientProvider)),
+  (ref) => VehiclesDataSource(ref.watch(backendApiClientProvider)),
 );
 final vehiclesProvider = NotifierProvider<VehiclesNotifier, VehiclesState>(
   VehiclesNotifier.new,

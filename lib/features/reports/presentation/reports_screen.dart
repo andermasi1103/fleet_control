@@ -8,7 +8,7 @@ import '../../dashboard/app_shell.dart';
 import '../data/report_export_service.dart';
 import '../data/reports_data_source.dart';
 
-final reportsDataSourceProvider = Provider((ref) => ReportsDataSource(ref.watch(supabaseClientProvider)));
+final reportsDataSourceProvider = Provider((ref) => ReportsDataSource(ref.watch(backendApiClientProvider)));
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -25,12 +25,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String? _error;
 
   @override
-  Widget build(BuildContext context) => AppShell(
+  Widget build(BuildContext context) {
+    final isSupervisor = ref.watch(sessionProvider).session?.user.role == 'supervisor';
+    final reportTypes = isSupervisor
+        ? ReportType.values.where((type) => type != ReportType.locations).toList()
+        : ReportType.values;
+    if (isSupervisor && _type == ReportType.locations) _type = ReportType.orders;
+    return AppShell(
     title: 'Reportes', showHomeAction: true,
     child: ListView(padding: const EdgeInsets.all(24), children: [
       Text('Reportes', style: Theme.of(context).textTheme.headlineSmall),
       const SizedBox(height: 16),
-      Wrap(spacing: 8, runSpacing: 8, children: ReportType.values.map((type) => ChoiceChip(
+      Wrap(spacing: 8, runSpacing: 8, children: reportTypes.map((type) => ChoiceChip(
         label: Text(type.label), selected: _type == type,
         onSelected: _loading ? null : (_) => setState(() { _type = type; _result = null; _error = null; }),
       )).toList()),
@@ -51,6 +57,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ])))),
     ]),
   );
+  }
 
   Future<void> _pickDate(bool from) async {
     final value = await showDatePicker(context: context, firstDate: DateTime(2020), lastDate: DateTime.now());

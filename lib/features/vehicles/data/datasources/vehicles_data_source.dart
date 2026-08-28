@@ -1,34 +1,26 @@
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../dtos/vehicle_dto.dart';
 
 class VehiclesDataSource {
-  VehiclesDataSource(this._client);
-  final SupabaseClient _client;
+  VehiclesDataSource(this._apiClient);
+  final ApiClient _apiClient;
   Future<List<VehicleDto>> getVehicles({required String sessionToken}) async {
-    final response = await _invoke(
-      'vehicles-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-      fallback: 'No fue posible cargar los vehículos.',
-    );
-    final values = response['vehicles'];
-    if (values is! List) {
-      throw const Failure(
-        message: 'No fue posible cargar los vehículos.',
-        type: FailureType.supabase,
-      );
-    }
     try {
+      final values = (await _apiClient.get<Map<String, dynamic>>(
+        '/api/vehicles',
+        bearerToken: sessionToken,
+      )).data?['vehicles'];
+      if (values is! List) {
+        return _invalid('No fue posible cargar los vehículos.');
+      }
       return values
-          .map((value) => VehicleDto.fromJson(_map(value)))
+          .map((item) => VehicleDto.fromJson(_map(item)))
           .toList(growable: false);
+    } on ApiException catch (error) {
+      throw _failure(error.statusCode, 'No fue posible cargar los vehículos.');
     } on FormatException {
-      throw const Failure(
-        message: 'No fue posible cargar los vehículos.',
-        type: FailureType.supabase,
-      );
+      return _invalid('No fue posible cargar los vehículos.');
     }
   }
 
@@ -41,21 +33,15 @@ class VehiclesDataSource {
     String? vehicleType,
     int? year,
     String? description,
-  }) => _save(
-    'vehicles-create',
-    sessionToken: sessionToken,
-    method: HttpMethod.post,
-    payload: {
-      'empresa_id': companyId,
-      'patente': plate,
-      'marca': brand,
-      'modelo': model,
-      'tipo_vehiculo': vehicleType,
-      'anio': year,
-      'descripcion': description,
-    },
-    fallback: 'No fue posible completar la operación.',
-  );
+  }) => _save('/api/vehicles', sessionToken, {
+    'empresa_id': companyId,
+    'patente': plate,
+    'marca': brand,
+    'modelo': model,
+    'tipo_vehiculo': vehicleType,
+    'anio': year,
+    'descripcion': description,
+  });
   Future<VehicleDto> updateVehicle({
     required String sessionToken,
     required String id,
@@ -67,110 +53,78 @@ class VehiclesDataSource {
     int? year,
     String? description,
     required bool isActive,
-  }) => _save(
-    'vehicles-update',
-    sessionToken: sessionToken,
-    method: HttpMethod.patch,
-    payload: {
-      'id': id,
-      'empresa_id': companyId,
-      'patente': plate,
-      'marca': brand,
-      'modelo': model,
-      'tipo_vehiculo': vehicleType,
-      'anio': year,
-      'descripcion': description,
-      'activo': isActive,
-    },
-    fallback: 'No fue posible completar la operación.',
-  );
+  }) => _save('/api/vehicles/$id', sessionToken, {
+    'empresa_id': companyId,
+    'patente': plate,
+    'marca': brand,
+    'modelo': model,
+    'tipo_vehiculo': vehicleType,
+    'anio': year,
+    'descripcion': description,
+    'activo': isActive,
+  }, patch: true);
   Future<VehicleDto> _save(
-    String functionName, {
-    required String sessionToken,
-    required HttpMethod method,
-    required Map<String, dynamic> payload,
-    required String fallback,
-  }) async {
-    final response = await _invoke(
-      functionName,
-      sessionToken: sessionToken,
-      method: method,
-      payload: payload,
-      fallback: fallback,
-    );
-    try {
-      return VehicleDto.fromJson(_map(response['vehicle']));
-    } on FormatException {
-      throw Failure(message: fallback, type: FailureType.supabase);
-    }
-  }
-
-  Future<Map<String, dynamic>> _invoke(
-    String functionName, {
-    required String sessionToken,
-    required HttpMethod method,
-    required String fallback,
-    Map<String, dynamic>? payload,
+    String path,
+    String token,
+    Map<String, dynamic> data, {
+    bool patch = false,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        functionName,
-        method: method,
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: payload,
+      final response = patch
+          ? await _apiClient.patch<Map<String, dynamic>>(
+              path,
+              data: data,
+              bearerToken: token,
+            )
+          : await _apiClient.post<Map<String, dynamic>>(
+              path,
+              data: data,
+              bearerToken: token,
+            );
+      return VehicleDto.fromJson(_map(response.data?['vehicle']));
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible completar la operación.',
       );
-      return _map(response.data);
-    } on FunctionException catch (exception) {
-      if (kDebugMode) {
-        final details = exception.details;
-        final code = details is Map ? details['error'] : null;
-        final keys = details is Map ? details.keys.join(', ') : 'empty';
-        debugPrint(
-          '$functionName failed: HTTP ${exception.status}; code=${code ?? '-'}; response=$keys',
-        );
-      }
-      throw _failure(exception.status, fallback);
-    } catch (_) {
-      throw Failure(message: fallback, type: FailureType.supabase);
+    } on FormatException {
+      return _invalid('No fue posible completar la operación.');
     }
   }
 
-  Failure _failure(int status, String fallback) {
-    switch (status) {
-      case 400:
-        return const Failure(
-          message: 'Revisa los datos ingresados.',
-          type: FailureType.supabase,
-        );
-      case 401:
-        return const Failure(
-          message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
-          type: FailureType.sessionExpired,
-        );
-      case 403:
-        return const Failure(
-          message: 'No tienes permiso para administrar vehículos.',
-          type: FailureType.insufficientPermissions,
-        );
-      case 404:
-        return const Failure(
-          message: 'El vehículo o empresa ya no está disponible.',
-          type: FailureType.supabase,
-        );
-      case 409:
-        return const Failure(
-          message:
-              'Ya existe un vehículo con esa patente para la empresa seleccionada.',
-          type: FailureType.supabase,
-        );
-      default:
-        return Failure(message: fallback, type: FailureType.supabase);
-    }
-  }
-
+  Never _invalid(String message) =>
+      throw Failure(message: message, type: FailureType.network);
+  Failure _failure(int? status, String fallback) => switch (status) {
+    400 => const Failure(
+      message: 'Revisa los datos ingresados.',
+      type: FailureType.network,
+    ),
+    401 => const Failure(
+      message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
+      type: FailureType.sessionExpired,
+    ),
+    403 => const Failure(
+      message: 'No tienes permiso para administrar vehículos.',
+      type: FailureType.insufficientPermissions,
+    ),
+    404 => const Failure(
+      message: 'El vehículo o empresa ya no está disponible.',
+      type: FailureType.network,
+    ),
+    409 => const Failure(
+      message:
+          'Ya existe un vehículo con esa patente para la empresa seleccionada.',
+      type: FailureType.network,
+    ),
+    _ => Failure(message: fallback, type: FailureType.network),
+  };
   Map<String, dynamic> _map(Object? value) {
-    if (value is Map<String, dynamic>) return value;
-    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
     throw const FormatException();
   }
 }

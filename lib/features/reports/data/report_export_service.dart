@@ -16,7 +16,7 @@ class ReportExportService {
 
   Future<void> pdf(ReportResult report, String filename) async {
     final document = pw.Document();
-    final columns = _columns(report.rows);
+    final columns = _columns(report);
     document.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4.landscape,
       build: (_) => [
@@ -39,7 +39,7 @@ class ReportExportService {
     final sheet = workbook['Reporte'];
     sheet.appendRow([TextCellValue(report.type.label)]);
     sheet.appendRow([TextCellValue('Generado: ${DateTime.now().toLocal()}')]);
-    final columns = _columns(report.rows);
+    final columns = _columns(report);
     sheet.appendRow(columns.map(TextCellValue.new).toList());
     for (final row in report.rows) {
       sheet.appendRow(columns.map((key) => TextCellValue(_text(row[key]))).toList());
@@ -47,6 +47,11 @@ class ReportExportService {
     return Uint8List.fromList(workbook.encode() ?? const []);
   }
 
-  List<String> _columns(List<Map<String, dynamic>> rows) => rows.isEmpty ? const [] : rows.first.keys.toList();
+  List<String> _columns(ReportResult report) {
+    const technical = {'id', 'empresa_id', 'local_id', 'usuario_id', 'chofer_usuario_id', 'gestion_id', 'pedido_id', 'latitud', 'longitud', 'queue_position'};
+    return report.rows.isEmpty
+        ? const []
+        : report.rows.first.keys.where((key) => !technical.contains(key.toLowerCase()) && !key.toLowerCase().endsWith('_id')).toList();
+  }
   static String _text(Object? value) => value is Map || value is List ? value.toString() : value?.toString() ?? '';
 }

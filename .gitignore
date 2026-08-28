@@ -46,4 +46,16 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-supabase/.temp/
+# Local backend configuration (may contain database credentials)
+backend/.env
+backend/node_modules/
+backend/dist/
+
+# Deployment secrets and database artifacts must remain outside version control.
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.backup
+firebase-service-account*.json

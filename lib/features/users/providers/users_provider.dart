@@ -9,7 +9,7 @@ import '../data/datasources/users_data_source.dart';
 import 'users_state.dart';
 
 final usersDataSourceProvider = Provider<UsersDataSource>((ref) {
-  return UsersDataSource(ref.watch(supabaseClientProvider));
+  return UsersDataSource(ref.watch(backendApiClientProvider));
 });
 
 final usersProvider = NotifierProvider<UsersNotifier, UsersState>(

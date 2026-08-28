@@ -1,21 +1,19 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../dtos/fleet_driver_location_dto.dart';
 
 class FleetLocationsDataSource {
   FleetLocationsDataSource(this._client);
 
-  final SupabaseClient _client;
+  final ApiClient _client;
 
   Future<List<FleetDriverLocationDto>> list({
     required String sessionToken,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        'fleet-locations-list',
-        method: HttpMethod.get,
-        headers: {'Authorization': 'Bearer $sessionToken'},
+      final response = await _client.get<Map<String, dynamic>>(
+        '/api/fleet/locations',
+        bearerToken: sessionToken,
       );
       final data = _map(response.data);
       final drivers = data['drivers'];
@@ -26,14 +24,14 @@ class FleetLocationsDataSource {
       return drivers
           .map((driver) => FleetDriverLocationDto.fromJson(_map(driver)))
           .toList(growable: false);
-    } on FunctionException catch (error) {
-      throw _failureFor(error.status);
+    } on ApiException catch (error) {
+      throw _failureFor(error.statusCode);
     } on Failure {
       rethrow;
     } on FormatException {
       throw const Failure(
         message: 'No fue posible interpretar las ubicaciones de la flota.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } catch (_) {
       throw const Failure(
@@ -49,7 +47,7 @@ class FleetLocationsDataSource {
     throw const FormatException('Respuesta de mapa de flota inválida.');
   }
 
-  Failure _failureFor(int statusCode) {
+  Failure _failureFor(int? statusCode) {
     switch (statusCode) {
       case 401:
         return const Failure(
@@ -67,7 +65,7 @@ class FleetLocationsDataSource {
         return Failure(
           message: 'No fue posible cargar las ubicaciones de la flota.',
           statusCode: statusCode,
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
     }
   }

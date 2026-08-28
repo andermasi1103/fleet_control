@@ -3,14 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/failure.dart';
 import '../../../core/providers/core_providers.dart';
-import '../data/datasources/supabase_auth_data_source.dart';
+import '../../role_views/providers/current_user_views_provider.dart';
+import '../data/datasources/fastify_auth_data_source.dart';
+import '../../notifications/providers/notifications_provider.dart';
 import '../domain/entities/auth_session.dart';
 import '../domain/entities/authenticated_user.dart';
 import 'session_state.dart';
 
-final supabaseAuthDataSourceProvider = Provider<SupabaseAuthDataSource>((ref) {
-  return SupabaseAuthDataSource(ref.watch(supabaseClientProvider));
+final fastifyAuthDataSourceProvider = Provider<FastifyAuthDataSource>((ref) {
+  return FastifyAuthDataSource(ref.watch(backendApiClientProvider));
 });
+
+/// Se habilita al terminar el bootstrap protegido con Fastify.
+final postLoginBootstrapProvider = StateProvider<bool>((ref) => false);
 
 final sessionProvider = NotifierProvider<SessionNotifier, SessionState>(
   SessionNotifier.new,
@@ -28,11 +33,12 @@ class SessionNotifier extends Notifier<SessionState> {
     required String usuario,
     required String password,
   }) async {
+    ref.read(postLoginBootstrapProvider.notifier).state = false;
     state = const SessionState.initializing();
 
     try {
       final loginResponse = await ref
-          .read(supabaseAuthDataSourceProvider)
+          .read(fastifyAuthDataSourceProvider)
           .signInWithUsuarioAndPassword(usuario: usuario, password: password);
 
       final session = AuthSession(
@@ -49,13 +55,21 @@ class SessionNotifier extends Notifier<SessionState> {
       }
 
       state = SessionState.authenticated(session);
+      await ref.read(currentUserViewsProvider.notifier).refresh();
+      await ref.read(notificationsProvider.notifier).load();
+      await ref
+          .read(pushNotificationServiceProvider)
+          .activate(session.sessionToken);
+      ref.read(postLoginBootstrapProvider.notifier).state = true;
     } on Failure catch (error) {
+      ref.read(postLoginBootstrapProvider.notifier).state = false;
       state = SessionState.unauthenticated(errorMessage: error.message);
       rethrow;
     } catch (_) {
+      ref.read(postLoginBootstrapProvider.notifier).state = false;
       const failure = Failure(
         message: 'No fue posible iniciar sesión. Intenta nuevamente.',
-        type: FailureType.supabase,
+        type: FailureType.network,
       );
 
       state = const SessionState.unauthenticated(
@@ -77,7 +91,10 @@ class SessionNotifier extends Notifier<SessionState> {
     try {
       if (sessionToken != null && sessionToken.isNotEmpty) {
         await ref
-            .read(supabaseAuthDataSourceProvider)
+            .read(pushNotificationServiceProvider)
+            .deactivate(sessionToken);
+        await ref
+            .read(fastifyAuthDataSourceProvider)
             .signOut(sessionToken: sessionToken);
       }
     } catch (_) {
@@ -112,7 +129,12 @@ class SessionNotifier extends Notifier<SessionState> {
   ///
   /// This is used after a password change because that operation revokes the
   /// current token before the client can attempt a regular remote sign-out.
+  void endSessionAfterPasswordChange() {
+    localSignOut();
+  }
+
   void localSignOut() {
+    ref.read(postLoginBootstrapProvider.notifier).state = false;
     state = const SessionState.unauthenticated();
   }
 }

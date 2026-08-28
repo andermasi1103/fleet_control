@@ -1,41 +1,38 @@
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../dtos/role_option_dto.dart';
 import '../dtos/user_dto.dart';
 import '../dtos/user_location_option_dto.dart';
 
 class UsersDataSource {
-  UsersDataSource(this._client);
+  UsersDataSource(this._apiClient);
+  final ApiClient _apiClient;
 
-  final SupabaseClient _client;
-
-  Future<List<UserDto>> getUsers({required String sessionToken}) async {
-    final body = await _invoke(
-      'users-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-      fallback: 'No fue posible cargar los usuarios.',
-    );
-    final users = body['users'];
-    if (users is! List) {
-      throw const Failure(
-        message: 'No fue posible cargar los usuarios.',
-        type: FailureType.supabase,
-      );
-    }
-    try {
-      return users
-          .map((item) => UserDto.fromJson(_map(item)))
-          .toList(growable: false);
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible cargar los usuarios.',
-        type: FailureType.supabase,
-      );
-    }
-  }
+  Future<List<UserDto>> getUsers({required String sessionToken}) => _list(
+    '/api/users',
+    sessionToken,
+    'users',
+    UserDto.fromJson,
+    'No fue posible cargar los usuarios.',
+  );
+  Future<List<RoleOptionDto>> getRoles({required String sessionToken}) => _list(
+    '/api/roles',
+    sessionToken,
+    'roles',
+    RoleOptionDto.fromJson,
+    'No fue posible cargar los roles.',
+  );
+  Future<List<UserLocationOptionDto>> getUserLocations({
+    required String sessionToken,
+    required String userId,
+  }) => _list(
+    '/api/users/$userId/locations',
+    sessionToken,
+    'locations',
+    UserLocationOptionDto.fromJson,
+    'No fue posible cargar los locales del usuario.',
+    userLocations: true,
+  );
 
   Future<UserDto> createUser({
     required String sessionToken,
@@ -44,57 +41,13 @@ class UsersDataSource {
     required String password,
     required String? companyId,
     required String roleId,
-  }) async {
-    if (kDebugMode) {
-      debugPrint(
-        'users-create request: hasNombre=${nombre.isNotEmpty}; '
-        'hasUsuario=${usuario.isNotEmpty}; hasPassword=${password.isNotEmpty}; '
-        'passwordLength=${password.length}; empresaIdNull=${companyId == null}; '
-        'roleIdEmpty=${roleId.isEmpty}',
-      );
-    }
-    final body = await _invoke(
-      'users-create',
-      sessionToken: sessionToken,
-      method: HttpMethod.post,
-      payload: {
-        'nombre': nombre,
-        'usuario': usuario,
-        'password': password,
-        'empresa_id': companyId,
-        'rol_id': roleId,
-      },
-      fallback: 'No fue posible completar la operación.',
-    );
-    return _userFrom(body);
-  }
-
-  Future<List<RoleOptionDto>> getRoles({required String sessionToken}) async {
-    final body = await _invoke(
-      'roles-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-      fallback: 'No fue posible cargar los roles.',
-    );
-    final roles = body['roles'];
-    if (roles is! List) {
-      throw const Failure(
-        message: 'No fue posible cargar los roles.',
-        type: FailureType.supabase,
-      );
-    }
-    try {
-      return roles
-          .map((item) => RoleOptionDto.fromJson(_map(item)))
-          .toList(growable: false);
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible cargar los roles.',
-        type: FailureType.supabase,
-      );
-    }
-  }
-
+  }) => _save('/api/users', sessionToken, {
+    'nombre': nombre,
+    'usuario': usuario,
+    'password': password,
+    'empresa_id': companyId,
+    'rol_id': roleId,
+  });
   Future<UserDto> updateUser({
     required String sessionToken,
     required String id,
@@ -103,208 +56,149 @@ class UsersDataSource {
     required String? companyId,
     required String roleId,
     required bool isActive,
-  }) async {
-    final body = await _invoke(
-      'users-update',
-      sessionToken: sessionToken,
-      method: HttpMethod.patch,
-      payload: {
-        'id': id,
-        'nombre': nombre,
-        'usuario': usuario,
-        'empresa_id': companyId,
-        'rol_id': roleId,
-        'activo': isActive,
-      },
-      fallback: 'No fue posible completar la operación.',
-    );
-    return _userFrom(body);
-  }
-
+  }) => _save('/api/users/$id', sessionToken, {
+    'nombre': nombre,
+    'usuario': usuario,
+    'empresa_id': companyId,
+    'rol_id': roleId,
+    'activo': isActive,
+  }, patch: true);
   Future<void> resetPassword({
     required String sessionToken,
     required String userId,
     required String password,
-  }) async {
-    await _invoke(
-      'users-reset-password',
-      sessionToken: sessionToken,
-      method: HttpMethod.post,
-      payload: {'user_id': userId, 'new_password': password},
-      fallback: 'No fue posible completar la operación.',
-    );
-  }
-
-  Future<List<UserLocationOptionDto>> getUserLocations({
-    required String sessionToken,
-    required String userId,
-  }) async {
-    final body = await _invoke(
-      'user-locations-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-      queryParameters: {'user_id': userId},
-      fallback: 'No fue posible cargar los locales del usuario.',
-      isUserLocationsRequest: true,
-    );
-    final locations = body['locations'];
-    if (locations is! List) {
-      throw const Failure(
-        message: 'No fue posible cargar los locales del usuario.',
-        type: FailureType.supabase,
-      );
-    }
-    try {
-      final parsedLocations = locations
-          .map((item) => UserLocationOptionDto.fromJson(_map(item)))
-          .toList(growable: false);
-      if (kDebugMode) {
-        debugPrint('user-locations-list locations=${parsedLocations.length}');
-      }
-      return parsedLocations;
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible cargar los locales del usuario.',
-        type: FailureType.supabase,
-      );
-    }
-  }
-
+  }) async => _send('/api/users/$userId/password-reset', sessionToken, {
+    'password': password,
+  });
   Future<void> updateUserLocations({
     required String sessionToken,
     required String userId,
     required List<String> locationIds,
-  }) async {
-    if (kDebugMode) {
-      debugPrint('user-locations-update selected=${locationIds.length}');
-    }
-    await _invoke(
-      'user-locations-update',
-      sessionToken: sessionToken,
-      method: HttpMethod.put,
-      payload: {'user_id': userId, 'location_ids': locationIds},
-      fallback: 'No fue posible completar la operación.',
-      isUserLocationsRequest: true,
-    );
-  }
+  }) async => _send(
+    '/api/users/$userId/locations',
+    sessionToken,
+    {'location_ids': locationIds},
+    put: true,
+    userLocations: true,
+  );
 
-  UserDto _userFrom(Map<String, dynamic> body) {
+  Future<UserDto> _save(
+    String path,
+    String token,
+    Map<String, dynamic> data, {
+    bool patch = false,
+  }) async {
     try {
-      return UserDto.fromJson(_map(body['user']));
+      final response = patch
+          ? await _apiClient.patch<Map<String, dynamic>>(
+              path,
+              data: data,
+              bearerToken: token,
+            )
+          : await _apiClient.post<Map<String, dynamic>>(
+              path,
+              data: data,
+              bearerToken: token,
+            );
+      return UserDto.fromJson(_map(response.data?['user']));
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible completar la operación.',
+      );
     } on FormatException {
-      throw const Failure(
-        message: 'No fue posible completar la operación.',
-        type: FailureType.supabase,
-      );
+      return _invalid('No fue posible completar la operación.');
     }
   }
 
-  Future<Map<String, dynamic>> _invoke(
-    String functionName, {
-    required String sessionToken,
-    required HttpMethod method,
-    required String fallback,
-    Map<String, dynamic>? payload,
-    Map<String, String>? queryParameters,
-    bool isUserLocationsRequest = false,
+  Future<void> _send(
+    String path,
+    String token,
+    Map<String, dynamic> data, {
+    bool put = false,
+    bool userLocations = false,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        functionName,
-        method: method,
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: payload,
-        queryParameters: queryParameters,
-      );
-      if (kDebugMode && isUserLocationsRequest) {
-        debugPrint('$functionName status=${response.status}');
+      if (put) {
+        await _apiClient.put<Map<String, dynamic>>(
+          path,
+          data: data,
+          bearerToken: token,
+        );
+      } else {
+        await _apiClient.post<Map<String, dynamic>>(
+          path,
+          data: data,
+          bearerToken: token,
+        );
       }
-      return _map(response.data);
-    } on FunctionException catch (error) {
-      _debugFunctionError(functionName, error);
-      throw _failureFor(
-        error.status,
-        fallback,
-        details: error.details,
-        isUserLocationsRequest: isUserLocationsRequest,
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible completar la operación.',
+        userLocations: userLocations,
       );
-    } on Failure {
-      rethrow;
-    } on FormatException {
-      throw Failure(message: fallback, type: FailureType.supabase);
-    } catch (_) {
-      throw Failure(message: fallback, type: FailureType.supabase);
     }
   }
 
-  Failure _failureFor(
-    int status,
+  Future<List<T>> _list<T>(
+    String path,
+    String token,
+    String key,
+    T Function(Map<String, dynamic>) parse,
     String fallback, {
-    Object? details,
-    bool isUserLocationsRequest = false,
-  }) {
-    final code = details is Map ? details['error']?.toString() : null;
-    switch (status) {
-      case 400:
-        if (code == 'invalid_reference') {
-          return const Failure(
-            message: 'Uno de los locales seleccionados no es válido.',
-            type: FailureType.supabase,
-          );
-        }
-        return const Failure(
-          message: 'Revisa los datos ingresados.',
-          type: FailureType.supabase,
-        );
-      case 401:
-        return const Failure(
-          message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
-          type: FailureType.sessionExpired,
-        );
-      case 403:
-        if (isUserLocationsRequest || code == 'forbidden') {
-          return const Failure(
-            message:
-                'No tienes permiso para administrar los locales de este usuario.',
-            type: FailureType.insufficientPermissions,
-          );
-        }
-        return const Failure(
-          message: 'No tienes permiso para administrar usuarios.',
-          type: FailureType.insufficientPermissions,
-        );
-      case 404:
-        return const Failure(
-          message: 'El usuario ya no está disponible.',
-          type: FailureType.supabase,
-        );
-      case 409:
-        return const Failure(
-          message: 'El nombre de usuario ya está en uso.',
-          type: FailureType.supabase,
-        );
-      default:
-        return Failure(message: fallback, type: FailureType.supabase);
+    bool userLocations = false,
+  }) async {
+    try {
+      final values = (await _apiClient.get<Map<String, dynamic>>(
+        path,
+        bearerToken: token,
+      )).data?[key];
+      if (values is! List) return _invalid(fallback);
+      return values.map((item) => parse(_map(item))).toList(growable: false);
+    } on ApiException catch (error) {
+      throw _failure(error.statusCode, fallback, userLocations: userLocations);
+    } on FormatException {
+      return _invalid(fallback);
     }
   }
 
-  void _debugFunctionError(String functionName, FunctionException error) {
-    if (!kDebugMode) return;
-    final details = error.details;
-    final code = details is Map ? details['error']?.toString() : null;
-    final response = details is Map
-        ? 'map keys: ${details.keys.map((key) => key.toString()).join(', ')}'
-        : details == null
-        ? 'empty'
-        : details.runtimeType.toString();
-    debugPrint(
-      '$functionName failed: HTTP ${error.status}; code=${code ?? '-'}; response=$response',
-    );
-  }
-
+  Never _invalid(String message) =>
+      throw Failure(message: message, type: FailureType.network);
+  Failure _failure(
+    int? status,
+    String fallback, {
+    bool userLocations = false,
+  }) => switch (status) {
+    400 => Failure(
+      message: userLocations
+          ? 'Uno de los locales seleccionados no es válido.'
+          : 'Revisa los datos ingresados.',
+      type: FailureType.network,
+    ),
+    401 => const Failure(
+      message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
+      type: FailureType.sessionExpired,
+    ),
+    403 => Failure(
+      message: userLocations
+          ? 'No tienes permiso para administrar los locales de este usuario.'
+          : 'No tienes permiso para administrar usuarios.',
+      type: FailureType.insufficientPermissions,
+    ),
+    404 => const Failure(
+      message: 'El usuario ya no está disponible.',
+      type: FailureType.network,
+    ),
+    409 => const Failure(
+      message: 'El nombre de usuario ya está en uso.',
+      type: FailureType.network,
+    ),
+    _ => Failure(message: fallback, type: FailureType.network),
+  };
   Map<String, dynamic> _map(Object? value) {
     if (value is Map<String, dynamic>) return value;
     if (value is Map) return Map<String, dynamic>.from(value);
-    throw const FormatException('Respuesta inválida.');
+    throw const FormatException();
   }
 }

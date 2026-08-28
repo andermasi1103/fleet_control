@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../dtos/attendance_history_dto.dart';
 
 class AttendanceHistoryDataSource {
   AttendanceHistoryDataSource(this._client);
 
-  final SupabaseClient _client;
+  final ApiClient _client;
 
   Future<AttendanceHistoryPage> getHistory({
     required String sessionToken,
@@ -24,7 +24,7 @@ class AttendanceHistoryDataSource {
           (from != null && to != null && from.isAfter(to))) {
         throw const Failure(
           message: 'Los filtros seleccionados no son válidos.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       }
       final queryParameters = <String, String>{
@@ -48,13 +48,12 @@ class AttendanceHistoryDataSource {
         hasHasta: to != null,
         hasLocalId: normalizedLocalId?.isNotEmpty == true,
       );
-      final response = await _client.functions.invoke(
-        'attendance-history',
-        method: HttpMethod.get,
-        headers: {'Authorization': 'Bearer $sessionToken'},
+      final response = await _client.get<Map<String, dynamic>>(
+        '/api/attendance',
+        bearerToken: sessionToken,
         queryParameters: queryParameters,
       );
-      _debugResponse(response.status, response.data);
+      _debugResponse(response.statusCode ?? 200, response.data);
       final body = _map(response.data);
       final attendances = body['attendances'];
       if (attendances is! List) {
@@ -77,9 +76,8 @@ class AttendanceHistoryDataSource {
         offset: _integer('offset', body['offset']),
         total: _integer('total', body['total']),
       );
-    } on FunctionException catch (error) {
-      _debugFunctionError(error);
-      throw _failureFor(error.status);
+    } on ApiException catch (error) {
+      throw _failureFor(error.statusCode);
     } on Failure catch (error) {
       _debugParse('Failure: ${error.message}');
       rethrow;
@@ -87,41 +85,41 @@ class AttendanceHistoryDataSource {
       _debugParse('FormatException: ${error.message}');
       throw const Failure(
         message: 'No fue posible cargar el historial de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } on TypeError catch (error) {
       _debugUnexpected(error);
       throw const Failure(
         message: 'No fue posible cargar el historial de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } on StateError catch (error) {
       _debugUnexpected(error);
       throw const Failure(
         message: 'No fue posible cargar el historial de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } on Exception catch (error) {
       _debugUnexpected(error);
       throw const Failure(
         message: 'No fue posible cargar el historial de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } catch (error) {
       _debugUnexpected(error);
       throw const Failure(
         message: 'No fue posible cargar el historial de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     }
   }
 
-  Failure _failureFor(int status) {
+  Failure _failureFor(int? status) {
     switch (status) {
       case 400:
         return const Failure(
           message: 'Los filtros seleccionados no son válidos.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       case 401:
         return const Failure(
@@ -136,29 +134,14 @@ class AttendanceHistoryDataSource {
       case 404:
         return const Failure(
           message: 'El recurso solicitado ya no está disponible.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       default:
         return const Failure(
           message: 'No fue posible cargar el historial de asistencia.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
     }
-  }
-
-  void _debugFunctionError(FunctionException error) {
-    if (!kDebugMode) return;
-    final details = error.details;
-    final code = details is Map ? details['error']?.toString() : null;
-    final response = details is Map
-        ? 'map keys: ${details.keys.map((key) => key.toString()).join(', ')}'
-        : details == null
-        ? 'empty'
-        : details.runtimeType.toString();
-    debugPrint(
-      'attendance-history failed: HTTP ${error.status}; '
-      'code=${code ?? '-'}; response=$response',
-    );
   }
 
   void _debugRequest({

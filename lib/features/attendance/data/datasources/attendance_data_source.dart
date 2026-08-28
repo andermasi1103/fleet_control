@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../dtos/attendance_dto.dart';
 import '../dtos/attendance_status_dto.dart';
 import '../dtos/location_dto.dart';
@@ -9,14 +9,13 @@ import '../dtos/location_dto.dart';
 class AttendanceDataSource {
   AttendanceDataSource(this._client);
 
-  final SupabaseClient _client;
+  final ApiClient _client;
 
   Future<List<LocationDto>> getLocations({required String sessionToken}) async {
     try {
-      final response = await _client.functions.invoke(
-        'locations-list',
-        method: HttpMethod.get,
-        headers: {'Authorization': 'Bearer $sessionToken'},
+      final response = await _client.get<Map<String, dynamic>>(
+        '/api/locations',
+        bearerToken: sessionToken,
       );
       final locations = _mapResponse(response.data)['locations'];
       if (locations is! List) {
@@ -34,20 +33,19 @@ class AttendanceDataSource {
         }
       }
       return parsedLocations;
-    } on FunctionException catch (error) {
-      _debugFunctionError('locations-list', error);
-      throw _functionFailure(error, 'No fue posible cargar los locales.');
+    } on ApiException catch (error) {
+      throw _apiFailure(error.statusCode, 'No fue posible cargar los locales.');
     } on Failure {
       rethrow;
     } on FormatException {
       throw const Failure(
         message: 'No fue posible cargar los locales.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } catch (_) {
       throw const Failure(
         message: 'No fue posible cargar los locales.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     }
   }
@@ -56,15 +54,14 @@ class AttendanceDataSource {
     required String sessionToken,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        'attendance-status',
-        method: HttpMethod.get,
-        headers: {'Authorization': 'Bearer $sessionToken'},
+      final response = await _client.get<Map<String, dynamic>>(
+        '/api/attendance/status',
+        bearerToken: sessionToken,
       );
       return AttendanceStatusDto.fromJson(_mapResponse(response.data));
-    } on FunctionException catch (error) {
-      throw _functionFailure(
-        error,
+    } on ApiException catch (error) {
+      throw _apiFailure(
+        error.statusCode,
         'No fue posible cargar el estado de asistencia.',
       );
     } on Failure {
@@ -72,12 +69,12 @@ class AttendanceDataSource {
     } on FormatException {
       throw const Failure(
         message: 'No fue posible cargar el estado de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } catch (_) {
       throw const Failure(
         message: 'No fue posible cargar el estado de asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     }
   }
@@ -89,37 +86,40 @@ class AttendanceDataSource {
     required double longitude,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        'attendance-create',
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: {'local_id': localId, 'latitud': latitude, 'longitud': longitude},
+      final response = await _client.post<Map<String, dynamic>>(
+        '/api/attendance',
+        bearerToken: sessionToken,
+        data: {'local_id': localId, 'latitud': latitude, 'longitud': longitude},
       );
       final attendanceValue = _mapResponse(response.data)['attendance'];
       return AttendanceDto.fromJson(_mapResponse(attendanceValue));
-    } on FunctionException catch (error) {
-      throw _functionFailure(error, 'No fue posible registrar la asistencia.');
+    } on ApiException catch (error) {
+      throw _apiFailure(
+        error.statusCode,
+        'No fue posible registrar la asistencia.',
+      );
     } on Failure {
       rethrow;
     } on FormatException {
       throw const Failure(
         message: 'No fue posible registrar la asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     } catch (_) {
       throw const Failure(
         message: 'No fue posible registrar la asistencia.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     }
   }
 
-  Failure _functionFailure(FunctionException error, String fallback) {
-    switch (error.status) {
+  Failure _apiFailure(int? status, String fallback) {
+    switch (status) {
       case 400:
         return const Failure(
           message:
               'No fue posible validar tu ubicación o el local seleccionado.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       case 401:
         return const Failure(
@@ -134,38 +134,22 @@ class AttendanceDataSource {
       case 404:
         return const Failure(
           message: 'El local seleccionado no está disponible.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       case 422:
         return const Failure(
           message: 'Estás fuera de la geocerca permitida para este local.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       case 500:
         return const Failure(
           message:
               'No fue posible registrar la asistencia. Intenta nuevamente.',
-          type: FailureType.supabase,
+          type: FailureType.backend,
         );
       default:
-        return Failure(message: fallback, type: FailureType.supabase);
+        return Failure(message: fallback, type: FailureType.backend);
     }
-  }
-
-  void _debugFunctionError(String endpoint, FunctionException error) {
-    if (!kDebugMode) {
-      return;
-    }
-    final details = error.details;
-    final code = details is Map ? details['error']?.toString() : null;
-    final responseShape = details is Map
-        ? 'map keys: ${details.keys.map((key) => key.toString()).join(', ')}'
-        : details == null
-        ? 'empty'
-        : details.runtimeType.toString();
-    debugPrint(
-      '$endpoint failed: HTTP ${error.status}; code=${code ?? '-'}; response=$responseShape',
-    );
   }
 
   Map<String, dynamic> _mapResponse(dynamic value) {

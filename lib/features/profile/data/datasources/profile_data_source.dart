@@ -1,12 +1,10 @@
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 
 class ProfileDataSource {
   ProfileDataSource(this._client);
 
-  final SupabaseClient _client;
+  final ApiClient _client;
 
   Future<void> changePassword({
     required String sessionToken,
@@ -14,30 +12,25 @@ class ProfileDataSource {
     required String newPassword,
   }) async {
     try {
-      await _client.functions.invoke(
-        'profile-change-password',
-        method: HttpMethod.post,
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: {
-          'current_password': currentPassword,
-          'new_password': newPassword,
-        },
+      await _client.post<Map<String, dynamic>>(
+        '/api/profile/password',
+        bearerToken: sessionToken,
+        data: {'currentPassword': currentPassword, 'newPassword': newPassword},
       );
-    } on FunctionException catch (error) {
-      if (kDebugMode) {
-        debugPrint(
-          'profile-change-password failed: HTTP ${error.status}; '
-          'code=${error.details is Map ? error.details['error'] : '-'}',
-        );
-      }
+    } on ApiException catch (error) {
       throw Failure(
-        message: _message(error.status),
-        type: FailureType.supabase,
+        message: _message(error.statusCode),
+        statusCode: error.statusCode,
+        type: error.statusCode == 401
+            ? FailureType.sessionExpired
+            : error.statusCode == 403
+            ? FailureType.insufficientPermissions
+            : FailureType.network,
       );
     }
   }
 
-  String _message(int status) {
+  String _message(int? status) {
     switch (status) {
       case 403:
         return 'La contraseña actual no es correcta.';

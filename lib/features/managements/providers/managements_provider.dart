@@ -6,7 +6,7 @@ import '../data/datasources/managements_data_source.dart';
 import '../data/dtos/management_dto.dart';
 
 final managementsSourceProvider = Provider(
-  (r) => ManagementsDataSource(r.watch(supabaseClientProvider)),
+  (r) => ManagementsDataSource(r.watch(backendApiClientProvider)),
 );
 final managementsProvider =
     NotifierProvider<ManagementsNotifier, ManagementsState>(

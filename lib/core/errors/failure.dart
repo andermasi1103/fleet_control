@@ -4,7 +4,7 @@ enum FailureType {
   userNotFound,
   userInactive,
   network,
-  supabase,
+  backend,
   traccar,
   timeout,
   rateLimited,

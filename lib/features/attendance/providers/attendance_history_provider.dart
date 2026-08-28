@@ -11,7 +11,7 @@ import 'attendance_provider.dart' show attendanceDataSourceProvider;
 
 final attendanceHistoryDataSourceProvider =
     Provider<AttendanceHistoryDataSource>((ref) {
-      return AttendanceHistoryDataSource(ref.watch(supabaseClientProvider));
+      return AttendanceHistoryDataSource(ref.watch(backendApiClientProvider));
     });
 
 final attendanceHistoryProvider =

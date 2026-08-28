@@ -1,69 +1,31 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../attendance/data/dtos/location_dto.dart';
 import '../dtos/company_option_dto.dart';
 import '../dtos/location_import_dto.dart';
 
 class LocationsDataSource {
-  LocationsDataSource(this._client);
+  LocationsDataSource(this._apiClient);
+  final ApiClient _apiClient;
 
-  final SupabaseClient _client;
-
-  Future<List<LocationDto>> getLocations({required String sessionToken}) async {
-    final body = await _invoke(
-      'locations-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-      fallback: 'No fue posible cargar los locales.',
-    );
-    final locations = body['locations'];
-    if (locations is! List) {
-      throw const Failure(
-        message: 'No fue posible cargar los locales.',
-        type: FailureType.supabase,
-      );
-    }
-    try {
-      return locations
-          .map((item) => LocationDto.fromJson(_map(item)))
-          .toList(growable: false);
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible cargar los locales.',
-        type: FailureType.supabase,
-      );
-    }
-  }
-
+  Future<List<LocationDto>> getLocations({
+    required String sessionToken,
+  }) async => _list(
+    '/api/locations',
+    sessionToken,
+    'locations',
+    (json) => LocationDto.fromJson(json),
+    'No fue posible cargar los locales.',
+  );
   Future<List<CompanyOptionDto>> getCompanies({
     required String sessionToken,
-  }) async {
-    final body = await _invoke(
-      'companies-list',
-      sessionToken: sessionToken,
-      method: HttpMethod.get,
-      fallback: 'No fue posible cargar las empresas.',
-    );
-    final companies = body['companies'];
-    if (companies is! List) {
-      throw const Failure(
-        message: 'No fue posible cargar las empresas.',
-        type: FailureType.supabase,
-      );
-    }
-    try {
-      return companies
-          .map((item) => CompanyOptionDto.fromJson(_map(item)))
-          .toList(growable: false);
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible cargar las empresas.',
-        type: FailureType.supabase,
-      );
-    }
-  }
-
+  }) async => _list(
+    '/api/companies',
+    sessionToken,
+    'companies',
+    (json) => CompanyOptionDto.fromJson(json),
+    'No fue posible cargar las empresas.',
+  );
   Future<LocationDto> createLocation({
     required String sessionToken,
     required String companyId,
@@ -72,31 +34,14 @@ class LocationsDataSource {
     required double latitude,
     required double longitude,
     required double radioMeters,
-  }) async {
-    final body = await _invoke(
-      'locations-create',
-      sessionToken: sessionToken,
-      method: HttpMethod.post,
-      payload: {
-        'empresa_id': companyId,
-        'nombre': nombre,
-        'direccion': direccion,
-        'latitud': latitude,
-        'longitud': longitude,
-        'radio_metros': radioMeters,
-      },
-      fallback: 'No fue posible completar la operación.',
-    );
-    try {
-      return LocationDto.fromJson(_map(body['location']));
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible completar la operación.',
-        type: FailureType.supabase,
-      );
-    }
-  }
-
+  }) => _save('/api/locations', sessionToken, {
+    'empresa_id': companyId,
+    'nombre': nombre,
+    'direccion': direccion,
+    'latitud': latitude,
+    'longitud': longitude,
+    'radio_metros': radioMeters,
+  });
   Future<LocationDto> updateLocation({
     required String sessionToken,
     required String id,
@@ -107,124 +52,124 @@ class LocationsDataSource {
     required double longitude,
     required double radioMeters,
     required bool isActive,
-  }) async {
-    final body = await _invoke(
-      'locations-update',
-      sessionToken: sessionToken,
-      method: HttpMethod.patch,
-      payload: {
-        'id': id,
-        'empresa_id': companyId,
-        'nombre': nombre,
-        'direccion': direccion,
-        'latitud': latitude,
-        'longitud': longitude,
-        'radio_metros': radioMeters,
-        'activo': isActive,
-      },
-      fallback: 'No fue posible completar la operación.',
-    );
-    try {
-      return LocationDto.fromJson(_map(body['location']));
-    } on FormatException {
-      throw const Failure(
-        message: 'No fue posible completar la operación.',
-        type: FailureType.supabase,
-      );
-    }
-  }
+  }) => _save('/api/locations/$id', sessionToken, {
+    'empresa_id': companyId,
+    'nombre': nombre,
+    'direccion': direccion,
+    'latitud': latitude,
+    'longitud': longitude,
+    'radio_metros': radioMeters,
+    'activo': isActive,
+  }, patch: true);
 
   Future<int> importLocations({
     required String sessionToken,
     required String companyId,
     required List<LocationImportRow> locations,
   }) async {
-    final body = await _invoke(
-      'locations-import',
-      sessionToken: sessionToken,
-      method: HttpMethod.post,
-      payload: {
-        'empresa_id': companyId,
-        'locations': locations.map((location) => location.toJson()).toList(),
-      },
-      fallback: 'No fue posible importar los locales.',
-    );
-    final count = body['imported_count'];
-    if (count is! num) {
-      throw const Failure(
-        message: 'El archivo contiene filas inválidas o duplicadas.',
-        type: FailureType.supabase,
-      );
+    try {
+      final data = (await _apiClient.post<Map<String, dynamic>>(
+        '/api/locations/import',
+        bearerToken: sessionToken,
+        data: {
+          'empresa_id': companyId,
+          'locations': locations.map((location) => location.toJson()).toList(),
+        },
+      )).data;
+      final count = data?['imported_count'];
+      if (count is! num) {
+        return _invalid('El archivo contiene filas inválidas o duplicadas.');
+      }
+      return count.toInt();
+    } on ApiException catch (error) {
+      throw _failure(error.statusCode, 'No fue posible importar los locales.');
     }
-    return count.toInt();
   }
 
-  Future<Map<String, dynamic>> _invoke(
-    String functionName, {
-    required String sessionToken,
-    required HttpMethod method,
-    required String fallback,
-    Map<String, dynamic>? payload,
+  Future<LocationDto> _save(
+    String path,
+    String token,
+    Map<String, dynamic> data, {
+    bool patch = false,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        functionName,
-        method: method,
-        headers: {'Authorization': 'Bearer $sessionToken'},
-        body: payload,
+      final response = patch
+          ? await _apiClient.patch<Map<String, dynamic>>(
+              path,
+              data: data,
+              bearerToken: token,
+            )
+          : await _apiClient.post<Map<String, dynamic>>(
+              path,
+              data: data,
+              bearerToken: token,
+            );
+      return LocationDto.fromJson(_map(response.data?['location']));
+    } on ApiException catch (error) {
+      throw _failure(
+        error.statusCode,
+        'No fue posible completar la operación.',
       );
-      return _map(response.data);
-    } on FunctionException catch (error) {
-      throw _failureFor(error.status, fallback);
-    } on Failure {
-      rethrow;
     } on FormatException {
-      throw Failure(message: fallback, type: FailureType.supabase);
-    } catch (_) {
-      throw Failure(message: fallback, type: FailureType.supabase);
+      return _invalid('No fue posible completar la operación.');
     }
   }
 
-  Failure _failureFor(int status, String fallback) {
-    switch (status) {
-      case 400:
-        return const Failure(
-          message: 'Revisa los datos ingresados.',
-          type: FailureType.supabase,
-        );
-      case 401:
-        return const Failure(
-          message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
-          type: FailureType.sessionExpired,
-        );
-      case 403:
-        return const Failure(
-          message: 'No tienes permiso para administrar locales.',
-          type: FailureType.insufficientPermissions,
-        );
-      case 404:
-        return const Failure(
-          message: 'El local o empresa ya no está disponible.',
-          type: FailureType.supabase,
-        );
-      case 409:
-        return const Failure(
-          message: 'Ya existe un local con esos datos.',
-          type: FailureType.supabase,
-        );
-      case 500:
-        return const Failure(
-          message: 'No fue posible completar la operación.',
-          type: FailureType.supabase,
-        );
-      default:
-        return Failure(message: fallback, type: FailureType.supabase);
+  Future<List<T>> _list<T>(
+    String path,
+    String token,
+    String key,
+    T Function(Map<String, dynamic>) parse,
+    String fallback,
+  ) async {
+    try {
+      final values = (await _apiClient.get<Map<String, dynamic>>(
+        path,
+        bearerToken: token,
+      )).data?[key];
+      if (values is! List) {
+        return _invalid(fallback);
+      }
+      return values.map((item) => parse(_map(item))).toList(growable: false);
+    } on ApiException catch (error) {
+      throw _failure(error.statusCode, fallback);
+    } on FormatException {
+      return _invalid(fallback);
     }
   }
 
-  Map<String, dynamic> _map(dynamic value) {
-    if (value is Map<String, dynamic>) return value;
-    if (value is Map) return Map<String, dynamic>.from(value);
-    throw const FormatException('Respuesta inválida.');
+  Never _invalid(String message) =>
+      throw Failure(message: message, type: FailureType.network);
+  Failure _failure(int? status, String fallback) => switch (status) {
+    400 => const Failure(
+      message: 'Revisa los datos ingresados.',
+      type: FailureType.network,
+    ),
+    401 => const Failure(
+      message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
+      type: FailureType.sessionExpired,
+    ),
+    403 => const Failure(
+      message: 'No tienes permiso para administrar locales.',
+      type: FailureType.insufficientPermissions,
+    ),
+    404 => const Failure(
+      message: 'El local o empresa ya no está disponible.',
+      type: FailureType.network,
+    ),
+    409 => const Failure(
+      message: 'Ya existe un local con esos datos.',
+      type: FailureType.network,
+    ),
+    _ => Failure(message: fallback, type: FailureType.network),
+  };
+  Map<String, dynamic> _map(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    throw const FormatException();
   }
 }

@@ -21,7 +21,7 @@ class FleetLocationsState {
 final fleetLocationsDataSourceProvider = Provider<FleetLocationsDataSource>((
   ref,
 ) {
-  return FleetLocationsDataSource(ref.watch(supabaseClientProvider));
+  return FleetLocationsDataSource(ref.watch(backendApiClientProvider));
 });
 
 final fleetLocationsProvider =

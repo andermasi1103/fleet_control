@@ -7,7 +7,7 @@ import '../data/datasources/user_vehicles_data_source.dart';
 import '../data/dtos/user_vehicle_dto.dart';
 
 final userVehiclesDataSourceProvider = Provider<UserVehiclesDataSource>((ref) {
-  return UserVehiclesDataSource(ref.watch(supabaseClientProvider));
+  return UserVehiclesDataSource(ref.watch(backendApiClientProvider));
 });
 
 final userVehicleProvider =

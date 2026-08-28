@@ -1,42 +1,55 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failure.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../attendance/data/dtos/location_dto.dart';
 import '../dtos/order_dto.dart';
 
 class OrdersDataSource {
   OrdersDataSource(this._client);
-  final SupabaseClient _client;
+  final ApiClient _client;
   Future<Map<String, dynamic>> _call(
-    String name,
+    String path,
     String token,
-    HttpMethod method, {
+    String method, {
     Map<String, dynamic>? body,
     Map<String, String>? query,
   }) async {
     try {
-      final response = await _client.functions.invoke(
-        name,
-        method: method,
-        headers: {'Authorization': 'Bearer $token'},
-        body: body,
-        queryParameters: query,
-      );
-      return Map<String, dynamic>.from(response.data as Map);
-    } on FunctionException catch (e) {
-      throw _failure(e.status);
+      final response = switch (method) {
+        'GET' => await _client.get<Map<String, dynamic>>(
+          path,
+          bearerToken: token,
+          queryParameters: query,
+        ),
+        'POST' => await _client.post<Map<String, dynamic>>(
+          path,
+          bearerToken: token,
+          data: body,
+          queryParameters: query,
+        ),
+        'PATCH' => await _client.patch<Map<String, dynamic>>(
+          path,
+          bearerToken: token,
+          data: body,
+          queryParameters: query,
+        ),
+        _ => throw StateError('Método no soportado.'),
+      };
+      return Map<String, dynamic>.from(response.data ?? const {});
+    } on ApiException catch (e) {
+      throw _failure(e.statusCode);
     } catch (_) {
       throw const Failure(
         message: 'No fue posible completar la operación.',
-        type: FailureType.supabase,
+        type: FailureType.backend,
       );
     }
   }
 
   Future<List<OrderDto>> list(String token) async {
     final data = await _call(
-      'orders-list',
+      '/api/orders',
       token,
-      HttpMethod.get,
+      'GET',
       query: {'limit': '50', 'offset': '0'},
     );
     return (data['orders'] as List)
@@ -45,20 +58,15 @@ class OrdersDataSource {
   }
 
   Future<OrderDto> detail(String token, String id) async {
-    final data = await _call(
-      'orders-detail',
-      token,
-      HttpMethod.get,
-      query: {'id': id},
-    );
+    final data = await _call('/api/orders/$id', token, 'GET');
     return OrderDto.fromJson(Map<String, dynamic>.from(data['order'] as Map));
   }
 
   Future<OrderDto> create(String token, CreateOrderRequest request) async {
     final data = await _call(
-      'orders-create',
+      '/api/orders',
       token,
-      HttpMethod.post,
+      'POST',
       body: request.toJson(),
     );
     return OrderDto.fromJson(Map<String, dynamic>.from(data['order'] as Map));
@@ -66,10 +74,10 @@ class OrdersDataSource {
 
   Future<OrderDto> cancel(String token, String id) async {
     final data = await _call(
-      'orders-cancel',
+      '/api/orders/$id/cancel',
       token,
-      HttpMethod.post,
-      body: {'order_id': id},
+      'POST',
+      body: const {},
     );
     return OrderDto.fromJson(Map<String, dynamic>.from(data['order'] as Map));
   }
@@ -79,9 +87,9 @@ class OrdersDataSource {
     required bool administrative,
   }) async {
     final data = await _call(
-      administrative ? 'locations-list' : 'my-locations-list',
+      administrative ? '/api/locations' : '/api/me/locations',
       token,
-      HttpMethod.get,
+      'GET',
     );
     return (data['locations'] as List)
         .map((e) => LocationDto.fromJson(Map<String, dynamic>.from(e as Map)))
@@ -95,9 +103,9 @@ class OrdersDataSource {
     bool activeOnly = true,
   }) async {
     final data = await _call(
-      'order-descriptions-list',
+      '/api/order-descriptions',
       token,
-      HttpMethod.get,
+      'GET',
       query: {'empresa_id': companyId},
     );
     return (data['descriptions'] as List)
@@ -115,9 +123,9 @@ class OrdersDataSource {
     required String name,
   }) async {
     final data = await _call(
-      'order-descriptions-create',
+      '/api/order-descriptions',
       token,
-      HttpMethod.post,
+      'POST',
       body: {'empresa_id': companyId, 'nombre': name},
     );
     return OrderDescriptionDto.fromJson(
@@ -132,20 +140,20 @@ class OrdersDataSource {
     required bool isActive,
   }) async {
     final data = await _call(
-      'order-descriptions-update',
+      '/api/order-descriptions/$id',
       token,
-      HttpMethod.patch,
-      body: {'id': id, 'nombre': name, 'activo': isActive},
+      'PATCH',
+      body: {'nombre': name, 'activo': isActive},
     );
     return OrderDescriptionDto.fromJson(
       Map<String, dynamic>.from(data['description'] as Map),
     );
   }
 
-  Failure _failure(int status) => switch (status) {
+  Failure _failure(int? status) => switch (status) {
     400 => const Failure(
       message: 'Revisa los datos ingresados.',
-      type: FailureType.supabase,
+      type: FailureType.backend,
     ),
     401 => const Failure(
       message: 'Tu sesión ha vencido. Inicia sesión nuevamente.',
@@ -158,15 +166,15 @@ class OrdersDataSource {
     404 => const Failure(
       message: 'El pedido ya no está disponible.',
       code: 'not_found',
-      type: FailureType.supabase,
+      type: FailureType.backend,
     ),
     409 => const Failure(
       message: 'El pedido ya no puede cancelarse.',
-      type: FailureType.supabase,
+      type: FailureType.backend,
     ),
     _ => const Failure(
       message: 'No fue posible completar la operación.',
-      type: FailureType.supabase,
+      type: FailureType.backend,
     ),
   };
 }

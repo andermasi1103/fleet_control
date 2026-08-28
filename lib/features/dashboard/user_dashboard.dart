@@ -125,7 +125,12 @@ class UserDashboard extends ConsumerWidget {
                       _DashboardCard(
                       icon: Icons.assignment_turned_in_outlined,
                       title: 'Pedidos disponibles',
-                      onTap: () => context.go('/driver-orders'),
+                        onTap: () => context.go('/driver-orders'),
+                      ),
+                    _DashboardCard(
+                      icon: Icons.notifications_outlined,
+                      title: 'Notificaciones',
+                      onTap: () => context.go('/notifications'),
                     ),
                     if (userViews.canView(AppViewCode.fleetMap))
                       _DashboardCard(
