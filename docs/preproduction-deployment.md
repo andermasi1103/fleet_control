@@ -59,8 +59,8 @@ controlada. El blueprint deja el auto-deploy apagado.
 | Grupo | Variables | Desarrollo | Preproducción |
 | --- | --- | --- | --- |
 | Runtime | `NODE_ENV`, `PORT`, `BACKEND_HOST`, `API_LOG_LEVEL` | `development`, `3000`, `127.0.0.1`, `info` | `production`, proveedor, `0.0.0.0`, `info` |
-| DB runtime | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` | PostgreSQL local y `fleet_app` | host privado y login de mínimo privilegio validado; no credencial Render gestionada con rol default administrativo |
-| TLS runtime | `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA` | `false`, `true`, vacía | `true`, `true`, CA del proveedor si corresponde |
+| DB runtime | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NETWORK` | PostgreSQL local, `fleet_app`, `external` | hostname interno y login de mínimo privilegio validado; `render_private` sólo para el Web Service y PostgreSQL en la misma región de Render |
+| TLS runtime | `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA` | `false`, `true`, vacía | con `render_private`: `false`, `true`, vacía y sin objeto `ssl` en `pg`; con `external`: `true`, `true`, CA del proveedor si corresponde |
 | Pool | `PG_POOL_MAX`, `PG_IDLE_TIMEOUT_MS`, `PG_CONNECTION_TIMEOUT_MS`, `PG_STATEMENT_TIMEOUT_MS` | defaults de `.env.example` | mismos valores iniciales, ajustar según el plan de DB |
 | CORS/proxy | `CORS_ALLOWED_ORIGINS`, `TRUST_PROXY` | URLs localhost explícitas, `false` | URL HTTPS exacta de Flutter Web, `false` hasta validar IP/CIDR del proxy |
 | Integraciones | `FIREBASE_SERVICE_ACCOUNT_JSON`, `TRACCAR_BASE_URL`, `TRACCAR_AUTHORIZATION` | opcionales | secretos sólo en gestor cloud; nunca en dart-defines |
@@ -257,17 +257,21 @@ Traccar; no imprima el entorno completo.
 | Grupo | Variables |
 | --- | --- |
 | Runtime no secret | `NODE_ENV`, `PORT`, `BACKEND_HOST`, `API_LOG_LEVEL`, límites, timeouts, pool y `SESSION_TTL_HOURS` |
-| Runtime DB | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA` |
+| Runtime DB | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NETWORK`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA` |
 | Migraciones aisladas | `MIGRATION_DATABASE_HOST`, `MIGRATION_DATABASE_PORT`, `MIGRATION_DATABASE_NAME`, `MIGRATION_DATABASE_USER`, `MIGRATION_DATABASE_PASSWORD`, `MIGRATION_DATABASE_SSL`, `MIGRATION_DATABASE_SSL_REJECT_UNAUTHORIZED`, `MIGRATION_DATABASE_SSL_CA` |
 | CORS | `CORS_ALLOWED_ORIGINS` con la URL HTTPS exacta de Web, nunca `*` |
 | Integraciones backend-only | `FIREBASE_SERVICE_ACCOUNT_JSON`, `TRACCAR_BASE_URL`, `TRACCAR_AUTHORIZATION`, y sus timeouts |
 
 El runtime usa variables individuales, no necesita adoptar `DATABASE_URL`.
 Mantenga las variables `MIGRATION_DATABASE_*` fuera del Web Service normal;
-úselo sólo para el runner manual o CI aislado. TLS verificado está exigido por
-el runtime en producción (`DATABASE_SSL=true` y
-`DATABASE_SSL_REJECT_UNAUTHORIZED=true`); la CA del proveedor se suministra en
-la variable dedicada si corresponde. No use `rejectUnauthorized=false`.
+úselo sólo para el runner manual o CI aislado. Configure explícitamente
+`DATABASE_NETWORK=render_private` sólo cuando el Web Service use el hostname
+interno de PostgreSQL de Render en la misma región: en ese caso
+`DATABASE_SSL=false` y `DATABASE_SSL_REJECT_UNAUTHORIZED=true`, por lo que el
+cliente no crea un objeto `ssl`. Cualquier conexión externa debe declarar
+`DATABASE_NETWORK=external`, `DATABASE_SSL=true` y
+`DATABASE_SSL_REJECT_UNAUTHORIZED=true`; suministre la CA del proveedor si
+corresponde. No use `rejectUnauthorized=false`.
 
 Firebase carga un JSON de cuenta de servicio sólo desde el secreto de backend.
 Traccar exige URL y autorización juntas y su autorización nunca llega a

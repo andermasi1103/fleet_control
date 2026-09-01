@@ -31,7 +31,7 @@ Variables disponibles:
 - `PORT` y `BACKEND_HOST`: dirección de escucha de la API. `BACKEND_HOST`
   acepta `0.0.0.0` para una UAT LAN controlada y por defecto permanece en
   `127.0.0.1`; `HOST` se conserva como alias compatible.
-- `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA`: conexión a PostgreSQL.
+- `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NETWORK`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA`: conexión a PostgreSQL. En producción, `DATABASE_NETWORK=external` exige TLS verificado (`DATABASE_SSL=true` y `DATABASE_SSL_REJECT_UNAUTHORIZED=true`). `DATABASE_NETWORK=render_private` sólo se permite para la URL interna de Render en la misma región y exige `DATABASE_SSL=false`; el cliente no envía un objeto `ssl` a `pg`.
 - `API_LOG_LEVEL`: nivel de registro de Fastify.
 - `CORS_ALLOWED_ORIGINS`: orígenes web permitidos, separados por comas. Para Flutter Web local use un puerto fijo, por ejemplo `http://localhost:8080,http://127.0.0.1:8080`; no use `*`.
 - `TRUST_PROXY`: `false` o una lista de IPs/CIDRs del reverse proxy; nunca use `true` indiscriminadamente.
@@ -94,9 +94,10 @@ Pendiente antes de producción: ejecutar la validación final con el rol `fleet_
 Use un reverse proxy HTTPS delante de Fastify y mantenga PostgreSQL en una red
 privada. Configure `TRUST_PROXY` sólo con los proxies que realmente reenvían
 tráfico. En `NODE_ENV=production` el backend exige declarar explícitamente
-puerto, host, conexión PostgreSQL, TLS, nivel de logs, CORS y TTL de sesión;
-además valida TLS de PostgreSQL con verificación y un usuario de base no
-superusuario.
+puerto, host, conexión PostgreSQL, red de base, TLS, nivel de logs, CORS y TTL
+de sesión. Las conexiones externas requieren TLS verificado; sólo el modo
+explícito `render_private` permite omitir TLS para una conexión interna de
+Render. El usuario de base sigue sin poder ser superusuario.
 
 Prepare roles, grants, backups y migraciones siguiendo
 [`database/PRODUCTION.md`](../database/PRODUCTION.md). Fastify no ejecuta DDL

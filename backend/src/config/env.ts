@@ -4,6 +4,7 @@ import { isIP } from 'node:net';
 import { z } from 'zod';
 
 const booleanFromEnv = z.enum(['true', 'false']).transform((value) => value === 'true');
+const databaseNetwork = z.enum(['external', 'render_private']);
 
 const backendHost = z.string().trim().min(1).refine((value) => {
   if (value === 'localhost' || isIP(value) !== 0) return true;
@@ -20,6 +21,7 @@ const envSchema = z.object({
   DATABASE_NAME: z.string().min(1).default('fleet_control_db'),
   DATABASE_USER: z.string().min(1).optional(),
   DATABASE_PASSWORD: z.string().min(1).optional(),
+  DATABASE_NETWORK: databaseNetwork.default('external'),
   DATABASE_SSL: booleanFromEnv.default('false'),
   DATABASE_SSL_REJECT_UNAUTHORIZED: booleanFromEnv.default('true'),
   DATABASE_SSL_CA: z.string().optional(),
@@ -45,44 +47,74 @@ const envSchema = z.object({
   TRACCAR_BASE_URL: z.string().url().optional(),
   TRACCAR_AUTHORIZATION: z.string().min(1).optional(),
   TRACCAR_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000)
-}).superRefine((value, context) => {
-  if (value.NODE_ENV !== 'production') return;
+});
 
+type EnvironmentSource = Record<string, string | undefined>;
+type ParsedEnvironment = z.infer<typeof envSchema>;
+
+function environmentError(issues: string[]): Error {
+  return new Error(`Invalid environment configuration. ${issues.join(' ')}`);
+}
+
+function productionValidationIssues(value: ParsedEnvironment, source: EnvironmentSource): string[] {
+  if (value.NODE_ENV !== 'production') return [];
+
+  const issues: string[] = [];
   const requiredProductionVariables = [
     'PORT', 'DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME',
-    'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_SSL', 'API_LOG_LEVEL',
-    'CORS_ALLOWED_ORIGINS', 'SESSION_TTL_HOURS'
+    'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NETWORK', 'DATABASE_SSL',
+    'DATABASE_SSL_REJECT_UNAUTHORIZED', 'API_LOG_LEVEL', 'CORS_ALLOWED_ORIGINS',
+    'SESSION_TTL_HOURS'
   ] as const;
   for (const key of requiredProductionVariables) {
-    if (!process.env[key]?.trim()) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: 'Must be set explicitly in production.' });
+    if (!source[key]?.trim()) {
+      issues.push(`${key} must be set explicitly in production.`);
     }
   }
-  if (!process.env.BACKEND_HOST?.trim() && !process.env.HOST?.trim()) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ['BACKEND_HOST'], message: 'BACKEND_HOST or HOST must be set explicitly in production.' });
+  if (!source.BACKEND_HOST?.trim() && !source.HOST?.trim()) {
+    issues.push('BACKEND_HOST or HOST must be set explicitly in production.');
   }
 
   if (value.DATABASE_USER === 'postgres') {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ['DATABASE_USER'], message: 'The PostgreSQL superuser is not allowed in production.' });
+    issues.push('The PostgreSQL superuser is not allowed in production.');
   }
-  if (!value.DATABASE_SSL || !value.DATABASE_SSL_REJECT_UNAUTHORIZED) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ['DATABASE_SSL'], message: 'Verified PostgreSQL TLS is required in production.' });
+  if (!value.DATABASE_SSL_REJECT_UNAUTHORIZED) {
+    issues.push('DATABASE_SSL_REJECT_UNAUTHORIZED must be true in production.');
+  }
+  if (value.DATABASE_NETWORK === 'external' && !value.DATABASE_SSL) {
+    issues.push('DATABASE_SSL must be true when DATABASE_NETWORK=external in production.');
+  }
+  if (value.DATABASE_NETWORK === 'render_private' && value.DATABASE_SSL) {
+    issues.push('DATABASE_SSL must be false when DATABASE_NETWORK=render_private in production.');
   }
   if ((value.TRACCAR_BASE_URL && !value.TRACCAR_AUTHORIZATION) || (!value.TRACCAR_BASE_URL && value.TRACCAR_AUTHORIZATION)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ['TRACCAR_BASE_URL'], message: 'Traccar URL and authorization must be configured together.' });
+    issues.push('Traccar URL and authorization must be configured together.');
   }
-});
 
-const parsedEnv = envSchema.safeParse(process.env);
-
-if (!parsedEnv.success) {
-  throw new Error('Invalid environment configuration. Review backend/.env.');
+  return issues;
 }
 
-export const env = {
-  ...parsedEnv.data,
-  HOST: parsedEnv.data.BACKEND_HOST ?? parsedEnv.data.HOST ?? '127.0.0.1'
-};
+export function parseEnvironment(source: EnvironmentSource = process.env): ParsedEnvironment & { HOST: string } {
+  const parsedEnv = envSchema.safeParse(source);
+
+  if (!parsedEnv.success) {
+    const issues = parsedEnv.error.issues.map((issue) => {
+      const path = issue.path.join('.') || 'environment';
+      return `${path}: ${issue.message}`;
+    });
+    throw environmentError(issues);
+  }
+
+  const issues = productionValidationIssues(parsedEnv.data, source);
+  if (issues.length > 0) throw environmentError(issues);
+
+  return {
+    ...parsedEnv.data,
+    HOST: parsedEnv.data.BACKEND_HOST ?? parsedEnv.data.HOST ?? '127.0.0.1'
+  };
+}
+
+export const env = parseEnvironment();
 
 export const corsOrigins = (env.CORS_ALLOWED_ORIGINS ?? env.CORS_ORIGIN ?? '')
   .split(',')

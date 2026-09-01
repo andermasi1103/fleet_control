@@ -6,8 +6,11 @@ La topología recomendada es: Internet → reverse proxy HTTPS → Fastify priva
 
 PostgreSQL no debe exponerse a Internet. Restrinja el puerto 5432 al backend,
 administración controlada y proceso de backup mediante firewall, VPC o red
-privada. Active TLS verificado (`DATABASE_SSL=true` y
-`DATABASE_SSL_REJECT_UNAUTHORIZED=true`) en producción.
+privada. En producción, las conexiones externas usan
+`DATABASE_NETWORK=external` con TLS verificado (`DATABASE_SSL=true` y
+`DATABASE_SSL_REJECT_UNAUTHORIZED=true`). Sólo una conexión interna de Render
+en la misma región puede declarar explícitamente
+`DATABASE_NETWORK=render_private` y `DATABASE_SSL=false`.
 
 ## Cambios de esquema
 

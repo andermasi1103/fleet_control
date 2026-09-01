@@ -16,8 +16,11 @@ services:
         value: "0.0.0.0"
       - key: API_LOG_LEVEL
         value: "info"
+      # Render PostgreSQL internal URL: same workspace and region only.
+      - key: DATABASE_NETWORK
+        value: "render_private"
       - key: DATABASE_SSL
-        value: "true"
+        value: "false"
       - key: DATABASE_SSL_REJECT_UNAUTHORIZED
         value: "true"
       - key: TRUST_PROXY
