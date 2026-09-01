@@ -40,6 +40,20 @@ const requiredFunctions = [
 
 type TableRow = { schemaname: string; tablename: string };
 type FunctionRow = { schema_name: string; function_name: string; signature: string; identity_arguments: string };
+type PgcryptoCheck = {
+  crypt_exists: boolean;
+  gen_salt_exists: boolean;
+  gen_salt_rounds_exists: boolean;
+  fleet_owner_can_execute: boolean;
+};
+type ApplicationSecurityDefinerCheck = {
+  all_found: boolean;
+  all_owned_by_fleet_owner: boolean;
+  all_security_definer: boolean;
+  all_have_safe_search_path: boolean;
+  public_execute_revoked: boolean;
+  fleet_app_can_execute: boolean;
+};
 
 function report(label: string, found: string[], missing: readonly string[]): void {
   console.log(`\n${label}`);
@@ -144,18 +158,64 @@ async function checkDatabase(): Promise<void> {
        WHERE e.extname = 'pgcrypto'`
     );
     const extension = extensionResult.rows[0];
-    const pgcryptoInExtensions = extension?.schema_name === 'extensions';
+    const pgcryptoInPublic = extension?.schema_name === 'public';
+    const pgcryptoFunctionsResult = await connectedClient.query<PgcryptoCheck>(
+      `SELECT
+         to_regprocedure('public.crypt(text,text)') IS NOT NULL AS crypt_exists,
+         to_regprocedure('public.gen_salt(text)') IS NOT NULL AS gen_salt_exists,
+         to_regprocedure('public.gen_salt(text,integer)') IS NOT NULL AS gen_salt_rounds_exists,
+         has_function_privilege('fleet_owner', 'public.crypt(text,text)', 'EXECUTE')
+           AND has_function_privilege('fleet_owner', 'public.gen_salt(text)', 'EXECUTE')
+           AND has_function_privilege('fleet_owner', 'public.gen_salt(text,integer)', 'EXECUTE')
+           AS fleet_owner_can_execute`
+    );
+    const pgcryptoFunctions = pgcryptoFunctionsResult.rows[0];
     console.log('\nExtensions');
     console.log(extension ? `  pgcrypto: found in schema ${extension.schema_name}` : '  pgcrypto: missing');
+    console.log(`  pgcrypto location: ${pgcryptoInPublic ? 'public (expected)' : 'unexpected'}`);
+    console.log(`  pgcrypto password helpers: ${pgcryptoFunctions?.crypt_exists && pgcryptoFunctions.gen_salt_exists && pgcryptoFunctions.gen_salt_rounds_exists ? 'found' : 'missing'}`);
+    console.log(`  fleet_owner effective pgcrypto EXECUTE: ${pgcryptoFunctions?.fleet_owner_can_execute ? 'available' : 'missing'}`);
 
-    const schemaResult = await connectedClient.query<{ nspname: string }>(
-      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = 'extensions'`
+    const securityDefinerResult = await connectedClient.query<ApplicationSecurityDefinerCheck>(
+      `WITH required(identity) AS (
+         VALUES
+           ('login_usuario(text, text)'),
+           ('fleet_control_verify_usuario_password(uuid, text)'),
+           ('fleet_control_set_usuario_password(uuid, text)'),
+           ('fleet_control_create_usuario(text, text, text, uuid, uuid, boolean)')
+       ), functions AS (
+         SELECT required.identity, p.oid, p.proowner, p.prosecdef, p.proconfig, p.proacl
+         FROM required
+         LEFT JOIN pg_catalog.pg_proc p
+           ON p.oid = to_regprocedure(format('public.%s', required.identity))
+       )
+       SELECT
+         bool_and(functions.oid IS NOT NULL) AS all_found,
+         bool_and(owner_role.rolname = 'fleet_owner') AS all_owned_by_fleet_owner,
+         bool_and(prosecdef) AS all_security_definer,
+         bool_and(coalesce(proconfig, ARRAY[]::text[]) @> ARRAY['search_path=public']) AS all_have_safe_search_path,
+         bool_and(NOT EXISTS (
+           SELECT 1
+           FROM aclexplode(coalesce(proacl, acldefault('f', proowner))) acl
+           WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+         )) AS public_execute_revoked,
+         bool_and(has_function_privilege('fleet_app', functions.oid, 'EXECUTE')) AS fleet_app_can_execute
+       FROM functions
+       LEFT JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = functions.proowner`
     );
-    console.log(`  extensions schema: ${schemaResult.rowCount ? 'found' : 'missing'}`);
+    const securityDefiner = securityDefinerResult.rows[0];
+    const securityDefinerHardened = securityDefiner?.all_found
+      && securityDefiner.all_owned_by_fleet_owner
+      && securityDefiner.all_security_definer
+      && securityDefiner.all_have_safe_search_path
+      && securityDefiner.public_execute_revoked
+      && securityDefiner.fleet_app_can_execute;
+    console.log('\nApplication password functions');
+    console.log(`  SECURITY DEFINER hardening: ${securityDefinerHardened ? 'verified' : 'incomplete'}`);
 
     await connectedClient.query('COMMIT');
 
-    if (missingTables.length || missingFunctions.length || !queue?.function_aligned || !queue?.index_found || !notificationIndexFound || !loginSignatureFound || !pgcryptoInExtensions || !schemaResult.rowCount) {
+    if (missingTables.length || missingFunctions.length || !queue?.function_aligned || !queue?.index_found || !notificationIndexFound || !loginSignatureFound || !pgcryptoInPublic || !pgcryptoFunctions?.crypt_exists || !pgcryptoFunctions.gen_salt_exists || !pgcryptoFunctions.gen_salt_rounds_exists || !pgcryptoFunctions.fleet_owner_can_execute || !securityDefinerHardened) {
       process.exitCode = 1;
     }
   } catch (error) {

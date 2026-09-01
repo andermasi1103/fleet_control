@@ -134,4 +134,11 @@ begin
 end;
 $$;
 
+-- The migration runner has already SET ROLE fleet_owner. Keep this privileged
+-- RPC closed to PUBLIC and expose it only to the Fastify runtime role.
+revoke all on function public.fleet_control_create_gestion(uuid, uuid, uuid, uuid)
+  from public;
+grant execute on function public.fleet_control_create_gestion(uuid, uuid, uuid, uuid)
+  to fleet_app;
+
 commit;

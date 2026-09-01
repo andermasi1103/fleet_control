@@ -1,8 +1,10 @@
 # Roles y privilegios de producción
 
-`create_roles.sql` prepara dos roles sin contraseña embebida:
+`create_roles.sql` prepara tres roles sin contraseña embebida:
 
 - `fleet_owner`: sin login; se reserva para migraciones y ownership.
+- `fleet_migrator`: login aislado para el runner de migraciones; puede hacer
+  `SET ROLE fleet_owner`.
 - `fleet_app`: login restringido para el proceso Fastify.
 
 Ejecute el script manualmente con el propietario actual de `fleet_control_db`,
@@ -12,20 +14,18 @@ Fastify.
 
 ## Procedimiento local
 
-1. Como propietario de la base, ejecute `create_roles.sql` en
-   `fleet_control_db`. El script no contiene ni modifica contraseñas.
-2. Defina la contraseña del runtime fuera del repositorio. La opción preferida
-   es abrir `psql` como administrador y ejecutar `\password fleet_app`. Si se
-   necesita SQL explícito, use únicamente un valor que el operador provea:
-
-   ```sql
-   ALTER ROLE fleet_app WITH PASSWORD 'TU_PASSWORD_FLEET_APP';
-   ```
-
-3. Guarde esa contraseña sólo en el gestor de secretos o en `backend/.env`
-   local, junto con `DATABASE_USER=fleet_app`. Nunca la copie a
-   `.env.example`, SQL, documentación ni Git.
-4. Ejecute `pnpm run db:check` y las pruebas de backend con `fleet_app`.
+1. Como credencial inicial propietaria de la base, ejecute `create_roles.sql`.
+   El script no contiene ni modifica contraseñas, retira `CREATE` de `PUBLIC`
+   sobre `public`, y deja la membresía persistente limitada a
+   `fleet_migrator → fleet_owner`.
+2. Tras verificar los roles, ejecute
+   `../bootstrap/create_extensions.sql` con esa misma credencial. Instala
+   `pgcrypto` en `public`; no cree el esquema histórico `extensions`.
+3. Defina interactivamente las dos contraseñas: `\password fleet_migrator` y
+   `\password fleet_app`. Guárdelas sólo en el gestor de secretos o en el
+   entorno local correspondiente; nunca en SQL, documentación o Git.
+4. Ejecute `pnpm run db:check` y las pruebas de backend con `fleet_app` sólo
+   después de una ventana de migraciones confirmada.
 
 La credencial que estuvo expuesta era una contraseña de conexión PostgreSQL
 (`DATABASE_PASSWORD`). Si correspondía a un rol todavía activo, rótela de
@@ -53,11 +53,13 @@ defecto), `MIGRATION_DATABASE_NAME`, `MIGRATION_DATABASE_USER` y
 `DATABASE_*` (reservadas para Fastify y `fleet_app`) ni `UAT_MIGRATOR_*`
 (reservadas para fixtures y utilidades de seguridad). Provea la contraseña
 sólo mediante variables efímeras de terminal o secretos de CI.
-El script transfiere los owners de las funciones `SECURITY DEFINER` listadas a
-`fleet_owner` y también los objetos existentes del esquema `public`, para que
-las migraciones puedan modificar su propio esquema. Debe revisarse y ejecutarse
-durante una ventana de mantenimiento. La transferencia de ownership de la base
-completa queda fuera del script y se programa por separado.
+El script transfiere a `fleet_owner` los objetos de aplicación existentes de
+`public`, excluyendo los miembros de extensiones. También configura los
+privilegios por defecto de `fleet_owner`: `PUBLIC` no recibe `EXECUTE` en
+funciones, mientras `fleet_app` recibe `SELECT`, `INSERT` y `UPDATE` en tablas
+nuevas y los permisos de secuencia necesarios. Las funciones nuevas deben
+otorgar `EXECUTE` explícitamente desde su migración. La transferencia de
+ownership de la base completa queda fuera del script.
 
 ## RLS del runtime Fastify
 

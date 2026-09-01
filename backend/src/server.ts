@@ -1,5 +1,6 @@
 import { buildApp } from './app.js';
 import { env } from './config/env.js';
+import { assertRuntimeDatabaseIdentity } from './db/pool.js';
 
 const app = await buildApp();
 
@@ -24,6 +25,9 @@ process.once('SIGINT', () => void shutdown('SIGINT'));
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
 try {
+  if (env.NODE_ENV === 'production') {
+    await assertRuntimeDatabaseIdentity();
+  }
   await app.listen({ host: env.HOST, port: env.PORT });
   app.log.info({ host: env.HOST, port: env.PORT }, 'MasiTrack API listening');
 } catch (error) {

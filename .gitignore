@@ -77,3 +77,6 @@ key.properties
 service-account*.json
 firebase-service-account*.json
 firebase-admin*.json
+
+# Local PostgreSQL schema-only evidence; never commit this recovered dump.
+database/migrations/local_schema_reference.sql

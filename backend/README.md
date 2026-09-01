@@ -69,7 +69,9 @@ Si se utiliza otro puerto, agréguelo explícitamente a `CORS_ALLOWED_ORIGINS` a
 iniciar el backend. Flutter envía el token de sesión local únicamente a las
 rutas de Fastify.
 
-`db:check` abre una transacción `READ ONLY` y comprueba las tablas, funciones, extensión `pgcrypto` y schema `extensions` esperados. No realiza cambios en la base de datos.
+`db:check` abre una transacción `READ ONLY` y comprueba las tablas, funciones y
+la extensión `pgcrypto` esperadas en el esquema estándar `public`. No realiza
+cambios en la base de datos.
 
 ## Health checks
 

@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 
 import { Client } from 'pg';
 
+import { prepareMigrationSql } from './migration-sql.js';
+
 const dryRun = process.argv.includes('--dry-run');
 const migrationsDirectory = resolve(
   process.env.MIGRATIONS_DIR ?? resolve(process.cwd(), '../database/migrations')
@@ -11,6 +13,10 @@ const migrationsDirectory = resolve(
 
 type AppliedMigration = { name: string; checksum: string };
 type DatabaseIdentity = { session_user: string; current_user: string };
+type MigrationCapability = DatabaseIdentity & {
+  has_expected_migrator_membership: boolean;
+  can_set_fleet_owner: boolean;
+};
 
 function requiredMigrationEnvironmentVariable(name: string): string {
   const value = process.env[name]?.trim();
@@ -59,9 +65,6 @@ async function main(): Promise<void> {
     .sort();
 
   const user = requiredMigrationEnvironmentVariable('MIGRATION_DATABASE_USER');
-  if (user !== 'fleet_migrator') {
-    throw new Error('MIGRATION_DATABASE_USER must be fleet_migrator.');
-  }
 
   const client = new Client({
     host: requiredMigrationEnvironmentVariable('MIGRATION_DATABASE_HOST'),
@@ -76,14 +79,30 @@ async function main(): Promise<void> {
   try {
     await client.connect();
 
-    const connectionIdentity = await client.query<DatabaseIdentity>(
-      'SELECT session_user, current_user'
+    const connectionIdentity = await client.query<MigrationCapability>(
+      `SELECT
+         session_user,
+         current_user,
+         (session_user = 'fleet_migrator'
+          OR EXISTS (
+            SELECT 1
+            FROM pg_auth_members membership
+            JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
+            JOIN pg_roles member_role ON member_role.oid = membership.member
+            WHERE granted_role.rolname = 'fleet_migrator'
+              AND member_role.rolname = session_user
+              AND NOT membership.admin_option
+              AND membership.inherit_option
+              AND membership.set_option
+          )) AS has_expected_migrator_membership,
+         pg_has_role(session_user, 'fleet_owner', 'SET') AS can_set_fleet_owner`
     );
-    if (
-      connectionIdentity.rows[0]?.session_user !== 'fleet_migrator' ||
-      connectionIdentity.rows[0]?.current_user !== 'fleet_migrator'
-    ) {
-      throw new Error('Migration runner requires the fleet_migrator identity.');
+    const migrationCapability = connectionIdentity.rows[0];
+    if (!migrationCapability?.session_user) {
+      throw new Error('Migration runner requires an authenticated session_user.');
+    }
+    if (!migrationCapability.has_expected_migrator_membership || !migrationCapability.can_set_fleet_owner) {
+      throw new Error('Migration login must be a fleet_migrator member that can SET ROLE fleet_owner.');
     }
 
     await client.query('SET ROLE fleet_owner');
@@ -93,10 +112,10 @@ async function main(): Promise<void> {
       'SELECT session_user, current_user'
     );
     if (
-      migrationIdentity.rows[0]?.session_user !== 'fleet_migrator' ||
-      migrationIdentity.rows[0]?.current_user !== 'fleet_owner'
+      migrationIdentity.rows[0]?.current_user !== 'fleet_owner' ||
+      migrationIdentity.rows[0]?.session_user !== migrationCapability.session_user
     ) {
-      throw new Error('fleet_migrator cannot assume fleet_owner.');
+      throw new Error('Migration login cannot assume fleet_owner.');
     }
 
     await client.query(
@@ -112,8 +131,9 @@ async function main(): Promise<void> {
     const byName = new Map(applied.rows.map((migration) => [migration.name, migration.checksum]));
 
     for (const name of files) {
-      const sql = await readFile(resolve(migrationsDirectory, name), 'utf8');
-      const checksum = createHash('sha256').update(sql).digest('hex');
+      const sourceSql = await readFile(resolve(migrationsDirectory, name), 'utf8');
+      const checksum = createHash('sha256').update(sourceSql).digest('hex');
+      const sql = prepareMigrationSql(sourceSql);
       const recordedChecksum = byName.get(name);
       if (recordedChecksum && recordedChecksum !== checksum) {
         throw new Error(`Migration checksum mismatch for ${name}. Create a new migration instead of editing it.`);
@@ -127,11 +147,14 @@ async function main(): Promise<void> {
 
       await client.query('BEGIN');
       try {
-        await client.query(sql);
         await client.query(
           'INSERT INTO public.schema_migrations (name, checksum) VALUES ($1::text, $2::text)',
           [name, checksum]
         );
+        // Preserve checksums of historical source files, but execute any
+        // legacy outer BEGIN/COMMIT wrapper inside this runner-owned
+        // transaction. This keeps the ledger and DDL atomic on errors.
+        await client.query(sql);
         await client.query('COMMIT');
         console.log(`Applied ${name}`);
       } catch (error) {
