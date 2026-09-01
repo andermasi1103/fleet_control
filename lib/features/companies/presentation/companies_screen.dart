@@ -51,7 +51,7 @@ class _CompaniesScreenState extends ConsumerState<CompaniesScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Administra las empresas registradas en Fleet Control.',
+                      'Administra las empresas registradas en MasiTrack.',
                     ),
                   ],
                 ),

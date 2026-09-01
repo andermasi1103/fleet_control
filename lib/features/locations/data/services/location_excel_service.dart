@@ -20,11 +20,19 @@ class LocationExcelService {
     try {
       final workbook = Excel.decodeBytes(bytes);
       if (workbook.tables.isEmpty) {
-        return const LocationImportPreview(rows: [], fileError: 'El archivo no contiene hojas.');
+        return const LocationImportPreview(
+          rows: [],
+          fileError: 'El archivo no contiene hojas.',
+        );
       }
-      final sheet = workbook.tables.values.first;
-      if (sheet.rows.isEmpty) {
-        return const LocationImportPreview(rows: [], fileError: 'El archivo está vacío.');
+      final sheet = workbook.tables.values
+          .where((sheet) => sheet.rows.isNotEmpty)
+          .firstOrNull;
+      if (sheet == null) {
+        return const LocationImportPreview(
+          rows: [],
+          fileError: 'El archivo está vacío.',
+        );
       }
       final actualHeaders = sheet.rows.first
           .map((cell) => _text(cell?.value).toLowerCase())
@@ -48,7 +56,8 @@ class LocationExcelService {
         if (values.every((cell) => _text(cell?.value).isEmpty)) continue;
         final row = _row(values, indexes, index + 1);
         final normalizedCode = row.codigo.toLowerCase();
-        final duplicate = normalizedCode.isNotEmpty && !seenCodes.add(normalizedCode);
+        final duplicate =
+            normalizedCode.isNotEmpty && !seenCodes.add(normalizedCode);
         rows.add(
           duplicate
               ? row.copyWith(
@@ -62,7 +71,12 @@ class LocationExcelService {
       }
       if (rows.length > 500) {
         return LocationImportPreview(
-          rows: rows.map((row) => row.copyWith(error: 'Máximo 500 filas por importación.')).toList(growable: false),
+          rows: rows
+              .map(
+                (row) =>
+                    row.copyWith(error: 'Máximo 500 filas por importación.'),
+              )
+              .toList(growable: false),
           fileError: 'El archivo supera el máximo de 500 filas.',
         );
       }
@@ -109,10 +123,8 @@ class LocationExcelService {
     int rowNumber,
   ) {
     String value(String header) => _text(
-          indexes[header]! < values.length
-              ? values[indexes[header]!]?.value
-              : null,
-        );
+      indexes[header]! < values.length ? values[indexes[header]!]?.value : null,
+    );
     final codigo = value('codigo');
     final nombre = value('nombre');
     final latitud = _number(value('latitud'));
@@ -123,8 +135,10 @@ class LocationExcelService {
       if (codigo.isEmpty) 'Código vacío.',
       if (nombre.isEmpty) 'Nombre vacío.',
       if (latitud == null || latitud < -90 || latitud > 90) 'Latitud inválida.',
-      if (longitud == null || longitud < -180 || longitud > 180) 'Longitud inválida.',
-      if (radio == null || radio < 10 || radio > 5000) 'Radio inválido (10 a 5000 m).',
+      if (longitud == null || longitud < -180 || longitud > 180)
+        'Longitud inválida.',
+      if (radio == null || radio < 10 || radio > 5000)
+        'Radio inválido (10 a 5000 m).',
       if (activo == null) 'Activo debe ser true/false.',
     ];
     return LocationImportRow(
@@ -143,10 +157,11 @@ class LocationExcelService {
 
   static String _text(CellValue? value) => value?.toString().trim() ?? '';
   static String? _nullIfEmpty(String value) => value.isEmpty ? null : value;
-  static double? _number(String value) => double.tryParse(value.replaceAll(',', '.'));
+  static double? _number(String value) =>
+      double.tryParse(value.replaceAll(',', '.'));
   static bool? _bool(String value) => switch (value.toLowerCase()) {
-        'true' || 'verdadero' || 'si' || 'sí' || '1' => true,
-        'false' || 'falso' || 'no' || '0' => false,
-        _ => null,
-      };
+    'true' || 'verdadero' || 'si' || 'sí' || '1' => true,
+    'false' || 'falso' || 'no' || '0' => false,
+    _ => null,
+  };
 }

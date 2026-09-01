@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import test from 'node:test';
 
 import type { QueryResultRow } from 'pg';
@@ -22,6 +24,8 @@ type SessionRow = QueryResultRow & {
 class FakeDatabase implements Database {
   sessionRows: SessionRow[] = [activeSession('chofer')];
   rpcParameters: unknown[][] = [];
+  presenceParameters: unknown[][] = [];
+  fleetLocationsQuery: string | null = null;
 
   async query<Row extends QueryResultRow = QueryResultRow>(
     text: string,
@@ -45,6 +49,14 @@ class FakeDatabase implements Database {
           captured_at: new Date('2030-01-01T00:00:00.000Z')
         }
       ]);
+    }
+    if (text.includes('fleet_control_touch_driver_presence')) {
+      this.presenceParameters.push(values);
+      return this.result<Row>([]);
+    }
+    if (text.includes('FROM public.usuarios u') && text.includes('cl.latitud AS latitude')) {
+      this.fleetLocationsQuery = text;
+      return this.result<Row>([]);
     }
 
     throw new Error(`Unexpected query in test: ${text}`);
@@ -154,6 +166,127 @@ test('una solicitud sin sesión recibe 401', async () => {
   } finally {
     await app.close();
   }
+});
+
+test('heartbeat del chofer usa sólo la sesión y no modifica la ubicación GPS', async () => {
+  const database = new FakeDatabase();
+  const app = await buildApp({ database });
+
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/driver/presence',
+      headers: authHeaders,
+      payload: {}
+    });
+
+    assert.equal(response.statusCode, 204);
+    assert.deepEqual(database.presenceParameters, [[userId]]);
+    assert.equal(database.rpcParameters.length, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test('heartbeat requiere sesión de chofer y rechaza datos del cliente', async () => {
+  const unauthenticated = await buildApp({ database: new FakeDatabase() });
+  try {
+    const response = await unauthenticated.inject({
+      method: 'POST',
+      url: '/api/driver/presence',
+      payload: {}
+    });
+    assert.equal(response.statusCode, 401);
+
+    const invalidTokenDatabase = new FakeDatabase();
+    invalidTokenDatabase.sessionRows = [];
+    const invalidTokenApp = await buildApp({ database: invalidTokenDatabase });
+    try {
+      const invalidBearer = await invalidTokenApp.inject({
+        method: 'POST',
+        url: '/api/driver/presence',
+        headers: { authorization: 'Bearer invalid-session-token' },
+        payload: {}
+      });
+      assert.equal(invalidBearer.statusCode, 401);
+    } finally {
+      await invalidTokenApp.close();
+    }
+  } finally {
+    await unauthenticated.close();
+  }
+
+  for (const role of ['admin', 'supervisor']) {
+    const database = new FakeDatabase();
+    database.sessionRows = [activeSession(role)];
+    const forbidden = await buildApp({ database });
+    try {
+      const response = await forbidden.inject({
+        method: 'POST',
+        url: '/api/driver/presence',
+        headers: authHeaders,
+        payload: {}
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(database.presenceParameters.length, 0);
+    } finally {
+      await forbidden.close();
+    }
+  }
+
+  const invalidDatabase = new FakeDatabase();
+  const invalid = await buildApp({ database: invalidDatabase });
+  try {
+    const response = await invalid.inject({
+      method: 'POST',
+      url: '/api/driver/presence',
+      headers: authHeaders,
+      payload: { user_id: userId, last_seen_at: '2030-01-01T00:00:00.000Z' }
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(invalidDatabase.presenceParameters.length, 0);
+  } finally {
+    await invalid.close();
+  }
+});
+
+test('fleet online/offline uses last_seen_at instead of captured_at', async () => {
+  const database = new FakeDatabase();
+  database.sessionRows = [activeSession('admin')];
+  const app = await buildApp({ database });
+
+  try {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/fleet/locations',
+      headers: authHeaders
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.match(database.fleetLocationsQuery ?? '', /WHEN cl\.last_seen_at IS NULL/);
+    assert.doesNotMatch(database.fleetLocationsQuery ?? '', /WHEN cl\.captured_at IS NULL/);
+  } finally {
+    await app.close();
+  }
+});
+
+test('presence migration preserves the independent GPS and presence timestamps', async () => {
+  const migration = await readFile(
+    resolve(process.cwd(), '../database/migrations/003_driver_presence.sql'),
+    'utf8'
+  );
+  const presenceFunction = migration.slice(
+    migration.indexOf('create or replace function public.fleet_control_touch_driver_presence'),
+    migration.indexOf('alter function public.fleet_control_update_driver_location')
+  );
+
+  assert.match(migration, /captured_at,\s*last_seen_at,\s*updated_at/);
+  assert.match(migration, /p_captured_at,\s*v_now,\s*v_now/);
+  assert.match(migration, /captured_at = excluded\.captured_at,\s*last_seen_at = excluded\.last_seen_at/);
+  assert.match(presenceFunction, /set last_seen_at = now\(\)/);
+  assert.doesNotMatch(presenceFunction, /captured_at\s*=/);
+  assert.doesNotMatch(presenceFunction, /latitud\s*=/);
+  assert.doesNotMatch(presenceFunction, /longitud\s*=/);
 });
 
 test('rechaza latitud, longitud y timestamp inválidos', async () => {

@@ -9,7 +9,8 @@ class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
@@ -28,7 +29,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         actions: [
           IconButton(
             tooltip: 'Actualizar',
-            onPressed: state.loading ? null : () => ref.read(notificationsProvider.notifier).load(),
+            onPressed: state.loading
+                ? null
+                : () => ref.read(notificationsProvider.notifier).load(),
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
@@ -43,7 +46,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           : RefreshIndicator(
               onRefresh: () => ref.read(notificationsProvider.notifier).load(),
               child: state.notifications.isEmpty
-                  ? ListView(children: const [SizedBox(height: 160), Center(child: Text('No tienes notificaciones.'))])
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 160),
+                        Center(child: Text('No tienes notificaciones.')),
+                      ],
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: state.notifications.length,
@@ -51,9 +59,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         notification: state.notifications[index],
                         onTap: () async {
                           final notification = state.notifications[index];
-                          await ref.read(notificationsProvider.notifier).markRead(notification);
+                          await ref
+                              .read(notificationsProvider.notifier)
+                              .markRead(notification);
                           if (!context.mounted) return;
-                          if (notification.route == '/driver-orders') context.go('/driver-orders');
+                          if (notification.route == '/driver-orders') {
+                            context.push('/driver-orders');
+                          }
                         },
                       ),
                     ),
@@ -69,11 +81,17 @@ class _NotificationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-    color: notification.isRead ? null : Theme.of(context).colorScheme.secondaryContainer,
+    color: notification.isRead
+        ? null
+        : Theme.of(context).colorScheme.secondaryContainer,
     child: ListTile(
-      leading: Icon(notification.isRead ? Icons.notifications_none : Icons.notifications),
+      leading: Icon(
+        notification.isRead ? Icons.notifications_none : Icons.notifications,
+      ),
       title: Text(notification.title),
-      subtitle: Text('${notification.message}\n${_dateLabel(notification.createdAt.toLocal())}'),
+      subtitle: Text(
+        '${notification.message}\n${_dateLabel(notification.createdAt.toLocal())}',
+      ),
       isThreeLine: true,
       onTap: onTap,
     ),

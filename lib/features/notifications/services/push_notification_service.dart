@@ -8,7 +8,7 @@ import '../../../core/config/app_config.dart';
 import '../data/datasources/notifications_data_source.dart';
 
 /// Firebase remains optional until native/web Firebase configuration is supplied.
-/// Every failure is swallowed here so notifications never block Fleet Control.
+/// Every failure is swallowed here so notifications never block MasiTrack.
 class PushNotificationService {
   PushNotificationService(this._dataSource, this._config);
 

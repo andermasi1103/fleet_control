@@ -88,7 +88,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ElevatedButton.icon(
                   onPressed: user == null
                       ? null
-                      : () => context.go('/profile/change-password'),
+                      : () => context.push('/profile/change-password'),
                   icon: const Icon(Icons.lock_outline),
                   label: const Text('CAMBIAR CONTRASEÑA'),
                 ),

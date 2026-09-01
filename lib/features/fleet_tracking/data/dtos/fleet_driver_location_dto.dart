@@ -10,7 +10,11 @@ class FleetDriverLocationDto {
     this.managementStatus,
     this.latitude,
     this.longitude,
+    this.accuracyMeters,
+    this.speedMps,
+    this.headingDegrees,
     this.capturedAt,
+    this.lastSeenAt,
   });
 
   final String driverUserId;
@@ -23,9 +27,21 @@ class FleetDriverLocationDto {
   final String? managementStatus;
   final double? latitude;
   final double? longitude;
+  final double? accuracyMeters;
+  final double? speedMps;
+  final double? headingDegrees;
   final DateTime? capturedAt;
+  final DateTime? lastSeenAt;
 
-  bool get hasLocation => latitude != null && longitude != null;
+  bool get hasLocation =>
+      latitude != null &&
+      longitude != null &&
+      latitude!.isFinite &&
+      longitude!.isFinite &&
+      latitude! >= -90 &&
+      latitude! <= 90 &&
+      longitude! >= -180 &&
+      longitude! <= 180;
 
   factory FleetDriverLocationDto.fromJson(Map<String, dynamic> json) {
     return FleetDriverLocationDto(
@@ -39,7 +55,11 @@ class FleetDriverLocationDto {
       managementStatus: _stringOrNull(json['management_status']),
       latitude: _doubleOrNull(json['latitude']),
       longitude: _doubleOrNull(json['longitude']),
+      accuracyMeters: _doubleOrNull(json['accuracy']),
+      speedMps: _doubleOrNull(json['speed']),
+      headingDegrees: _doubleOrNull(json['heading']),
       capturedAt: _dateOrNull(json['captured_at']),
+      lastSeenAt: _dateOrNull(json['last_seen_at']),
     );
   }
 

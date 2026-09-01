@@ -14,3 +14,5 @@ export const driverLocationSchema = z.object({
   heading: z.number().finite().min(0).lt(360).nullish().transform((value) => value ?? null),
   captured_at: z.string().datetime({ offset: true })
 }).strict();
+
+export const driverPresenceSchema = z.object({}).strict();

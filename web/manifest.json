@@ -1,11 +1,11 @@
 {
-    "name": "fleet_control",
-    "short_name": "fleet_control",
+    "name": "MasiTrack",
+    "short_name": "MasiTrack",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "MasiTrack — Control de flotas.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

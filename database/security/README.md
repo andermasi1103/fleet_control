@@ -43,6 +43,16 @@ autenticación y operaciones. `fleet_owner` no tiene login: para el comando de
 migración use una identidad operativa separada, no usada por Fastify, que esté
 autorizada a ejecutar `SET ROLE fleet_owner`. No conceda esa membresía a
 `fleet_app`.
+
+`pnpm run db:migrate` acepta únicamente las variables de migración
+`MIGRATION_DATABASE_HOST`, `MIGRATION_DATABASE_PORT` (opcional; 5432 por
+defecto), `MIGRATION_DATABASE_NAME`, `MIGRATION_DATABASE_USER` y
+`MIGRATION_DATABASE_PASSWORD`, `MIGRATION_DATABASE_SSL`,
+`MIGRATION_DATABASE_SSL_REJECT_UNAUTHORIZED` y
+`MIGRATION_DATABASE_SSL_CA`; el usuario debe ser `fleet_migrator`. No usa
+`DATABASE_*` (reservadas para Fastify y `fleet_app`) ni `UAT_MIGRATOR_*`
+(reservadas para fixtures y utilidades de seguridad). Provea la contraseña
+sólo mediante variables efímeras de terminal o secretos de CI.
 El script transfiere los owners de las funciones `SECURITY DEFINER` listadas a
 `fleet_owner` y también los objetos existentes del esquema `public`, para que
 las migraciones puedan modificar su propio esquema. Debe revisarse y ejecutarse

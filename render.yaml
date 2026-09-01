@@ -1,0 +1,60 @@
+# Blueprint de referencia para crear manualmente MasiTrack API en Render.
+# No crea ni despliega recursos hasta que un operador conecte este repositorio.
+services:
+  - type: web
+    runtime: node
+    name: masitrack-api-preproduction
+    rootDir: backend
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    startCommand: node dist/src/server.js
+    healthCheckPath: /ready
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_ENV
+        value: "production"
+      - key: BACKEND_HOST
+        value: "0.0.0.0"
+      - key: API_LOG_LEVEL
+        value: "info"
+      - key: DATABASE_SSL
+        value: "true"
+      - key: DATABASE_SSL_REJECT_UNAUTHORIZED
+        value: "true"
+      - key: TRUST_PROXY
+        value: "false"
+      - key: PG_POOL_MAX
+        value: "10"
+      - key: PG_IDLE_TIMEOUT_MS
+        value: "30000"
+      - key: PG_CONNECTION_TIMEOUT_MS
+        value: "5000"
+      - key: PG_STATEMENT_TIMEOUT_MS
+        value: "30000"
+      - key: SESSION_TTL_HOURS
+        value: "24"
+      - key: API_RATE_LIMIT_MAX
+        value: "300"
+      - key: API_RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: LOGIN_USERNAME_LIMIT_MAX
+        value: "5"
+      - key: LOGIN_USERNAME_WINDOW_MS
+        value: "60000"
+      - key: LOGIN_IP_LIMIT_MAX
+        value: "20"
+      - key: LOGIN_IP_WINDOW_MS
+        value: "900000"
+      - key: DATABASE_HOST
+        sync: false
+      - key: DATABASE_PORT
+        sync: false
+      - key: DATABASE_NAME
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_SSL_CA
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

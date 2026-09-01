@@ -48,7 +48,11 @@ class CompaniesNotifier extends Notifier<CompaniesState> {
 
   Future<void> refresh() => loadCompanies();
 
-  Future<bool> createCompany({required String nombre}) async {
+  Future<bool> createCompany({
+    required String nombre,
+    required String localMarkerIcon,
+    required String? localMarkerColor,
+  }) async {
     final token = _sessionToken();
     if (token == null) return _sessionFailure();
     state = state.copyWith(
@@ -59,7 +63,12 @@ class CompaniesNotifier extends Notifier<CompaniesState> {
     try {
       await ref
           .read(companiesDataSourceProvider)
-          .createCompany(sessionToken: token, nombre: nombre);
+          .createCompany(
+            sessionToken: token,
+            nombre: nombre,
+            localMarkerIcon: localMarkerIcon,
+            localMarkerColor: localMarkerColor,
+          );
       state = state.copyWith(
         isSaving: false,
         successMessage: 'Empresa creada correctamente.',
@@ -81,6 +90,8 @@ class CompaniesNotifier extends Notifier<CompaniesState> {
     required String id,
     required String nombre,
     required bool isActive,
+    required String localMarkerIcon,
+    required String? localMarkerColor,
   }) async {
     final token = _sessionToken();
     if (token == null) return _sessionFailure();
@@ -97,6 +108,8 @@ class CompaniesNotifier extends Notifier<CompaniesState> {
             id: id,
             nombre: nombre,
             isActive: isActive,
+            localMarkerIcon: localMarkerIcon,
+            localMarkerColor: localMarkerColor,
           );
       state = state.copyWith(
         isSaving: false,

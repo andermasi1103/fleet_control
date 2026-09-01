@@ -3,13 +3,17 @@ class CompanyDto {
     required this.id,
     required this.nombre,
     required this.isActive,
+    required this.localMarkerIcon,
     this.createdAt,
     this.updatedAt,
+    this.localMarkerColor,
   });
 
   final String id;
   final String nombre;
   final bool isActive;
+  final String localMarkerIcon;
+  final String? localMarkerColor;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -27,6 +31,8 @@ class CompanyDto {
       id: id,
       nombre: nombre,
       isActive: activo,
+      localMarkerIcon: _markerIcon(json['local_marker_icon']),
+      localMarkerColor: _markerColor(json['local_marker_color']),
       createdAt: _date(json['created_at']),
       updatedAt: _date(json['updated_at']),
     );
@@ -38,5 +44,16 @@ class CompanyDto {
     final parsed = DateTime.tryParse(value);
     if (parsed == null) throw const FormatException('Fecha inválida.');
     return parsed;
+  }
+
+  static String _markerIcon(Object? value) {
+    final icon = value?.toString().trim();
+    return icon == null || icon.isEmpty ? 'storefront' : icon;
+  }
+
+  static String? _markerColor(Object? value) {
+    final color = value?.toString().trim();
+    if (color == null || color.isEmpty) return null;
+    return RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(color) ? color : null;
   }
 }

@@ -58,132 +58,131 @@ class UserDashboard extends ConsumerWidget {
               const SizedBox(height: 16),
               _ViewsErrorCard(
                 message: userViews.errorMessage!,
-                onRetry: () => ref
-                    .read(currentUserViewsProvider.notifier)
-                    .refresh(),
+                onRetry: () =>
+                    ref.read(currentUserViewsProvider.notifier).refresh(),
               ),
             ] else ...[
-            if (userViews.canView(AppViewCode.driverOrders)) ...[
-              const SizedBox(height: 16),
-              _DriverLocationStatusCard(state: trackingState),
-            ],
-            const SizedBox(height: 24),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final columnCount = width >= 1080
-                    ? 4
-                    : width >= 720
-                    ? 3
-                    : 2;
+              if (userViews.canView(AppViewCode.driverOrders)) ...[
+                const SizedBox(height: 16),
+                _DriverLocationStatusCard(state: trackingState),
+              ],
+              const SizedBox(height: 24),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columnCount = width >= 1080
+                      ? 4
+                      : width >= 720
+                      ? 3
+                      : 2;
 
-                return GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: columnCount,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: width < 420 ? 1 : 1.25,
-                  children: [
-                    if (userViews.canView(AppViewCode.attendance))
+                  return GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: columnCount,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: width < 420 ? 1 : 1.25,
+                    children: [
+                      if (userViews.canView(AppViewCode.attendance))
+                        _DashboardCard(
+                          icon: Icons.fingerprint,
+                          title: 'Marcar entrada',
+                          onTap: () => context.push('/attendance'),
+                        ),
+                      if (userViews.canView(AppViewCode.attendance))
+                        _DashboardCard(
+                          icon: Icons.history,
+                          title: 'Historial',
+                          onTap: () => context.push('/attendance/history'),
+                        ),
+                      if (userViews.canView(AppViewCode.vehicles))
+                        _DashboardCard(
+                          icon: Icons.local_shipping_outlined,
+                          title: 'Vehículos',
+                          onTap: () => context.push('/vehicles'),
+                        ),
+                      if (isLocal && userViews.canView(AppViewCode.orders))
+                        _DashboardCard(
+                          icon: Icons.add_circle_outline,
+                          title: 'Crear pedido',
+                          onTap: () => context.push('/orders/new'),
+                        ),
+                      if (isLocal && userViews.canView(AppViewCode.orders))
+                        _DashboardCard(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Mis pedidos',
+                          onTap: () => context.push('/orders'),
+                        ),
+                      if (!isLocal && userViews.canView(AppViewCode.orders))
+                        _DashboardCard(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Pedidos',
+                          onTap: () => context.push('/orders'),
+                        ),
+                      if (userViews.canView(AppViewCode.driverOrders))
+                        _DashboardCard(
+                          icon: Icons.assignment_turned_in_outlined,
+                          title: 'Pedidos disponibles',
+                          onTap: () => context.push('/driver-orders'),
+                        ),
                       _DashboardCard(
-                      icon: Icons.fingerprint,
-                      title: 'Marcar entrada',
-                      onTap: () => context.go('/attendance'),
-                    ),
-                    if (userViews.canView(AppViewCode.attendance))
-                      _DashboardCard(
-                      icon: Icons.history,
-                      title: 'Historial',
-                      onTap: () => context.go('/attendance/history'),
-                    ),
-                    if (userViews.canView(AppViewCode.vehicles))
-                      _DashboardCard(
-                      icon: Icons.local_shipping_outlined,
-                      title: 'Vehículos',
-                      onTap: () => context.go('/vehicles'),
-                    ),
-                    if (isLocal && userViews.canView(AppViewCode.orders))
-                      _DashboardCard(
-                        icon: Icons.add_circle_outline,
-                        title: 'Crear pedido',
-                        onTap: () => context.go('/orders/new'),
+                        icon: Icons.notifications_outlined,
+                        title: 'Notificaciones',
+                        onTap: () => context.push('/notifications'),
                       ),
-                    if (isLocal && userViews.canView(AppViewCode.orders))
-                      _DashboardCard(
-                        icon: Icons.receipt_long_outlined,
-                        title: 'Mis pedidos',
-                        onTap: () => context.go('/orders'),
-                      ),
-                    if (!isLocal && userViews.canView(AppViewCode.orders))
-                      _DashboardCard(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'Pedidos',
-                      onTap: () => context.go('/orders'),
-                    ),
-                    if (userViews.canView(AppViewCode.driverOrders))
-                      _DashboardCard(
-                      icon: Icons.assignment_turned_in_outlined,
-                      title: 'Pedidos disponibles',
-                        onTap: () => context.go('/driver-orders'),
-                      ),
-                    _DashboardCard(
-                      icon: Icons.notifications_outlined,
-                      title: 'Notificaciones',
-                      onTap: () => context.go('/notifications'),
-                    ),
-                    if (userViews.canView(AppViewCode.fleetMap))
-                      _DashboardCard(
-                      icon: Icons.map_outlined,
-                      title: 'Mapa de Flota',
-                      onTap: () => context.go('/fleet-map'),
-                    ),
-                    if (userViews.canView(AppViewCode.managements))
-                      _DashboardCard(
-                        icon: Icons.assignment_outlined,
-                        title: 'Gestiones',
-                        onTap: () => context.go('/managements'),
-                      ),
-                    if (userViews.canView(AppViewCode.users))
-                      _DashboardCard(
-                      icon: Icons.people_outline,
-                      title: 'Usuarios',
-                      onTap: () => context.go('/users'),
-                    ),
-                    if (userViews.canView(AppViewCode.companies))
-                      _DashboardCard(
-                      icon: Icons.business_outlined,
-                      title: 'Empresas',
-                      onTap: () => context.go('/companies'),
-                    ),
-                    if (userViews.canView(AppViewCode.locations))
-                      _DashboardCard(
-                      icon: Icons.location_on_outlined,
-                      title: 'Locales',
-                      onTap: () => context.go('/locations'),
-                    ),
-                    if (userViews.canView(AppViewCode.settings))
-                      _DashboardCard(
-                      icon: Icons.person_outline,
-                      title: 'Perfil',
-                      onTap: () => context.go('/profile'),
-                    ),
-                    if (userViews.canView(AppViewCode.settings))
-                      _DashboardCard(
-                      icon: Icons.settings_outlined,
-                      title: 'Configuración',
-                        onTap: () => context.go('/settings'),
-                      ),
-                    if (userViews.canView(AppViewCode.reports))
-                      _DashboardCard(
-                        icon: Icons.assessment_outlined,
-                        title: 'Reportes',
-                        onTap: () => context.go('/reports'),
-                      ),
-                  ],
-                );
-              },
-            ),
+                      if (userViews.canView(AppViewCode.fleetMap))
+                        _DashboardCard(
+                          icon: Icons.map_outlined,
+                          title: 'Mapa de Flota',
+                          onTap: () => context.push('/fleet-map'),
+                        ),
+                      if (userViews.canView(AppViewCode.managements))
+                        _DashboardCard(
+                          icon: Icons.assignment_outlined,
+                          title: 'Gestiones',
+                          onTap: () => context.push('/managements'),
+                        ),
+                      if (userViews.canView(AppViewCode.users))
+                        _DashboardCard(
+                          icon: Icons.people_outline,
+                          title: 'Usuarios',
+                          onTap: () => context.push('/users'),
+                        ),
+                      if (userViews.canView(AppViewCode.companies))
+                        _DashboardCard(
+                          icon: Icons.business_outlined,
+                          title: 'Empresas',
+                          onTap: () => context.push('/companies'),
+                        ),
+                      if (userViews.canView(AppViewCode.locations))
+                        _DashboardCard(
+                          icon: Icons.location_on_outlined,
+                          title: 'Locales',
+                          onTap: () => context.push('/locations'),
+                        ),
+                      if (userViews.canView(AppViewCode.settings))
+                        _DashboardCard(
+                          icon: Icons.person_outline,
+                          title: 'Perfil',
+                          onTap: () => context.push('/profile'),
+                        ),
+                      if (userViews.canView(AppViewCode.settings))
+                        _DashboardCard(
+                          icon: Icons.settings_outlined,
+                          title: 'Configuración',
+                          onTap: () => context.push('/settings'),
+                        ),
+                      if (userViews.canView(AppViewCode.reports))
+                        _DashboardCard(
+                          icon: Icons.assessment_outlined,
+                          title: 'Reportes',
+                          onTap: () => context.push('/reports'),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ],
         ),
@@ -267,7 +266,7 @@ class _DriverLocationStatusCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               state.message ??
-                  'Fleet Control utiliza tu ubicación mientras la aplicación está abierta para informar tu disponibilidad y apoyar la operación de flota.',
+                  'MasiTrack utiliza tu ubicación mientras la aplicación está abierta para informar tu disponibilidad y apoyar la operación de flota.',
             ),
           ],
         ),

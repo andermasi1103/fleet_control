@@ -4,6 +4,7 @@ import '../../../core/errors/failure.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../authentication/providers/session_provider.dart';
 import '../../managements/data/dtos/management_dto.dart';
+import '../../tracking/providers/driver_operational_state_provider.dart';
 import '../data/datasources/driver_orders_data_source.dart';
 import '../data/dtos/available_order_dto.dart';
 
@@ -67,9 +68,9 @@ class DriverOrdersNotifier extends Notifier<DriverOrdersState> {
     }
     state = state.copyWith(loading: true, clearError: true);
     try {
-      final orders = await ref.read(driverOrdersDataSourceProvider).available(
-            token,
-          );
+      final orders = await ref
+          .read(driverOrdersDataSourceProvider)
+          .available(token);
       state = state.copyWith(loading: false, orders: orders);
     } on Failure catch (error) {
       state = state.copyWith(
@@ -103,6 +104,9 @@ class DriverOrdersNotifier extends Notifier<DriverOrdersState> {
         claiming: false,
         orders: state.orders.where((order) => order.id != orderId).toList(),
       );
+      ref
+          .read(driverOperationalStateProvider.notifier)
+          .updateFromManagement(management);
       return management;
     } on Failure catch (error) {
       state = state.copyWith(

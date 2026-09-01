@@ -48,14 +48,32 @@ app.*.map.json
 
 # Local backend configuration (may contain database credentials)
 backend/.env
+backend/.env.*
+!backend/.env.example
 backend/node_modules/
 backend/dist/
+node_modules/
+
+# Local environment overrides, dependency caches, and agent state.
+.env
+.env.*
+!.env.example
+.pnpm-store/
+.roo/
+.roomodes
 
 # Deployment secrets and database artifacts must remain outside version control.
 *.pem
+*.cer
+*.crt
 *.key
 *.p12
 *.pfx
+*.jks
+*.keystore
+key.properties
 *.dump
 *.backup
+service-account*.json
 firebase-service-account*.json
+firebase-admin*.json

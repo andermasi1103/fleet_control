@@ -49,7 +49,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Administra los vehículos registrados en Fleet Control.',
+                      'Administra los vehículos registrados en MasiTrack.',
                     ),
                   ],
                 ),

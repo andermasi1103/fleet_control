@@ -50,14 +50,14 @@ export function registerAdministrationRoutes(app: FastifyInstance, database: Dat
     if (!sessionOr401(request.fleetSession, reply)) return;
     const s = request.fleetSession;
     if (!isSuper(s) && !s.companyId) return forbidden(reply);
-    const result = await database.query<Row>(`SELECT id, nombre, activo, created_at, updated_at FROM public.empresas ${isSuper(s) ? '' : 'WHERE id = $1::uuid'} ORDER BY nombre`, isSuper(s) ? [] : [s.companyId]);
+    const result = await database.query<Row>(`SELECT id, nombre, activo, local_marker_icon, local_marker_color, created_at, updated_at FROM public.empresas ${isSuper(s) ? '' : 'WHERE id = $1::uuid'} ORDER BY nombre`, isSuper(s) ? [] : [s.companyId]);
     return noStore(reply).send({ companies: result.rows });
   });
   app.post('/api/companies', { preHandler: app.requireFleetSession }, async (request, reply) => {
     const body = companySchema.safeParse(request.body); if (!body.success) return invalid(reply);
     if (!sessionOr401(request.fleetSession, reply)) return; if (!isSuper(request.fleetSession)) return forbidden(reply);
     if (await companyNameTaken(database, body.data.nombre)) return fail(reply, 409, 'conflict', 'Ya existe una empresa con ese nombre.');
-    try { const result = await database.query<Row>('INSERT INTO public.empresas (nombre, activo) VALUES ($1::text, $2::boolean) RETURNING id, nombre, activo, created_at, updated_at', [body.data.nombre, body.data.activo ?? true]); return noStore(reply).code(201).send({ company: result.rows[0] }); }
+    try { const result = await database.query<Row>('INSERT INTO public.empresas (nombre, activo, local_marker_icon, local_marker_color) VALUES ($1::text, $2::boolean, $3::text, $4::text) RETURNING id, nombre, activo, local_marker_icon, local_marker_color, created_at, updated_at', [body.data.nombre, body.data.activo ?? true, body.data.local_marker_icon ?? 'storefront', body.data.local_marker_color ?? null]); return noStore(reply).code(201).send({ company: result.rows[0] }); }
     catch (error) { if (uniqueError(error)) return fail(reply, 409, 'conflict', 'Ya existe una empresa con ese nombre.'); throw error; }
   });
   app.patch('/api/companies/:id', { preHandler: app.requireFleetSession }, async (request, reply) => {
@@ -65,9 +65,9 @@ export function registerAdministrationRoutes(app: FastifyInstance, database: Dat
     if (!sessionOr401(request.fleetSession, reply)) return; if (!isSuper(request.fleetSession)) return forbidden(reply);
     if (body.data.nombre !== undefined && await companyNameTaken(database, body.data.nombre, params.data.id)) return fail(reply, 409, 'conflict', 'Ya existe una empresa con ese nombre.');
     const values: unknown[] = []; const set: string[] = [];
-    if (body.data.nombre !== undefined) { values.push(body.data.nombre); set.push(`nombre = $${values.length}::text`); } if (body.data.activo !== undefined) { values.push(body.data.activo); set.push(`activo = $${values.length}::boolean`); }
+    if (body.data.nombre !== undefined) { values.push(body.data.nombre); set.push(`nombre = $${values.length}::text`); } if (body.data.activo !== undefined) { values.push(body.data.activo); set.push(`activo = $${values.length}::boolean`); } if (body.data.local_marker_icon !== undefined) { values.push(body.data.local_marker_icon); set.push(`local_marker_icon = $${values.length}::text`); } if (body.data.local_marker_color !== undefined) { values.push(body.data.local_marker_color); set.push(`local_marker_color = $${values.length}::text`); }
     values.push(params.data.id);
-    try { const result = await database.query<Row>(`UPDATE public.empresas SET ${set.join(', ')}, updated_at = now() WHERE id = $${values.length}::uuid RETURNING id, nombre, activo, created_at, updated_at`, values); if (!result.rows[0]) return fail(reply, 404, 'not_found', 'Empresa no encontrada.'); return noStore(reply).send({ company: result.rows[0] }); }
+    try { const result = await database.query<Row>(`UPDATE public.empresas SET ${set.join(', ')}, updated_at = now() WHERE id = $${values.length}::uuid RETURNING id, nombre, activo, local_marker_icon, local_marker_color, created_at, updated_at`, values); if (!result.rows[0]) return fail(reply, 404, 'not_found', 'Empresa no encontrada.'); return noStore(reply).send({ company: result.rows[0] }); }
     catch (error) { if (uniqueError(error)) return fail(reply, 409, 'conflict', 'Ya existe una empresa con ese nombre.'); throw error; }
   });
 

@@ -1,6 +1,6 @@
 import 'user_profile_dto.dart';
 
-/// Respuesta privada del login de Fleet Control.
+/// Respuesta privada del login de MasiTrack.
 /// El token pertenece a la sesión, no al perfil del usuario.
 class LoginResponseDto {
   const LoginResponseDto({

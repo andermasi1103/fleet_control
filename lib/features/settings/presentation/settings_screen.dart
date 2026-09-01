@@ -44,16 +44,17 @@ class SettingsScreen extends ConsumerWidget {
                   title: 'Cambio de contraseña',
                   description: 'Actualiza la contraseña de tu cuenta.',
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.go('/profile/change-password'),
+                  onTap: () => context.push('/profile/change-password'),
                 ),
                 if (userViews.canView(AppViewCode.roleViewsManagement)) ...[
                   const SizedBox(height: 12),
                   _SettingsItem(
                     icon: Icons.admin_panel_settings_outlined,
                     title: 'Roles y vistas',
-                    description: 'Configura los módulos disponibles para cada rol.',
+                    description:
+                        'Configura los módulos disponibles para cada rol.',
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.go('/settings/role-views'),
+                    onTap: () => context.push('/settings/role-views'),
                   ),
                 ],
                 if (userViews.canView(AppViewCode.orders)) ...[
@@ -85,7 +86,7 @@ class SettingsScreen extends ConsumerWidget {
                 const _SectionTitle('Acerca de'),
                 _SettingsItem(
                   icon: Icons.info_outline,
-                  title: 'Fleet Control',
+                  title: 'MasiTrack',
                   description: 'Versión: ${AppConstants.version}',
                   details: kDebugMode
                       ? 'Development (${config.environment.name})'
@@ -120,7 +121,7 @@ class _SettingsHeader extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Preferencias y opciones de Fleet Control.',
+              'Preferencias y opciones de MasiTrack.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
           ],

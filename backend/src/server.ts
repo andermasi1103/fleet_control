@@ -25,8 +25,8 @@ process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
 try {
   await app.listen({ host: env.HOST, port: env.PORT });
+  app.log.info({ host: env.HOST, port: env.PORT }, 'MasiTrack API listening');
 } catch (error) {
-  const startupError = error as { name?: string };
-  app.log.error({ errorName: startupError.name }, 'Server failed to start');
+  app.log.error({ err: error }, 'Server failed to start');
   process.exit(1);
 }

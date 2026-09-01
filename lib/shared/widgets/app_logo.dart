@@ -21,7 +21,7 @@ class AppLogo extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Fleet Control',
+          'MasiTrack',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,

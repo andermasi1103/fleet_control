@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/failure.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../role_views/providers/current_user_views_provider.dart';
+import '../data/session_storage.dart';
 import '../data/datasources/fastify_auth_data_source.dart';
 import '../../notifications/providers/notifications_provider.dart';
 import '../domain/entities/auth_session.dart';
@@ -12,6 +15,10 @@ import 'session_state.dart';
 
 final fastifyAuthDataSourceProvider = Provider<FastifyAuthDataSource>((ref) {
   return FastifyAuthDataSource(ref.watch(backendApiClientProvider));
+});
+
+final sessionStorageProvider = Provider<SessionStorage>((ref) {
+  return SecureSessionStorage();
 });
 
 /// Se habilita al terminar el bootstrap protegido con Fastify.
@@ -26,7 +33,9 @@ class SessionNotifier extends Notifier<SessionState> {
 
   @override
   SessionState build() {
-    return const SessionState.unauthenticated();
+    ref.read(postLoginBootstrapProvider.notifier).state = false;
+    Future.microtask(_restoreSession);
+    return const SessionState.initializing();
   }
 
   Future<void> signInWithUsuarioAndPassword({
@@ -54,13 +63,8 @@ class SessionNotifier extends Notifier<SessionState> {
         );
       }
 
-      state = SessionState.authenticated(session);
-      await ref.read(currentUserViewsProvider.notifier).refresh();
-      await ref.read(notificationsProvider.notifier).load();
-      await ref
-          .read(pushNotificationServiceProvider)
-          .activate(session.sessionToken);
-      ref.read(postLoginBootstrapProvider.notifier).state = true;
+      await ref.read(sessionStorageProvider).write(session);
+      await _activateAuthenticatedSession(session);
     } on Failure catch (error) {
       ref.read(postLoginBootstrapProvider.notifier).state = false;
       state = SessionState.unauthenticated(errorMessage: error.message);
@@ -104,7 +108,8 @@ class SessionNotifier extends Notifier<SessionState> {
         debugPrint('session-logout request failed');
       }
     } finally {
-      localSignOut();
+      await _clearStoredSession();
+      _setUnauthenticated();
       _isSigningOut = false;
     }
   }
@@ -116,13 +121,13 @@ class SessionNotifier extends Notifier<SessionState> {
     if (currentSession == null || currentSession.user.id != updatedUser.id) {
       return;
     }
-    state = SessionState.authenticated(
-      AuthSession(
-        user: updatedUser,
-        sessionToken: currentSession.sessionToken,
-        expiresAt: currentSession.expiresAt,
-      ),
+    final updatedSession = AuthSession(
+      user: updatedUser,
+      sessionToken: currentSession.sessionToken,
+      expiresAt: currentSession.expiresAt,
     );
+    state = SessionState.authenticated(updatedSession);
+    unawaited(_persistUpdatedSession(updatedSession));
   }
 
   /// Clears the in-memory session without calling a remote endpoint.
@@ -134,6 +139,91 @@ class SessionNotifier extends Notifier<SessionState> {
   }
 
   void localSignOut() {
+    unawaited(_clearStoredSession());
+    _setUnauthenticated();
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final session = await ref.read(sessionStorageProvider).read();
+      if (session == null) {
+        _setUnauthenticated();
+        return;
+      }
+      if (session.isExpired || !session.user.isActive) {
+        await _clearStoredSession();
+        _setUnauthenticated();
+        return;
+      }
+
+      await ref
+          .read(fastifyAuthDataSourceProvider)
+          .validateSession(sessionToken: session.sessionToken);
+      await _activateAuthenticatedSession(session);
+    } on Failure catch (error) {
+      if (error.type == FailureType.sessionExpired) {
+        await _clearStoredSession();
+      }
+      _setUnauthenticated();
+      if (kDebugMode) {
+        debugPrint('session-restore failed: $error');
+      }
+    } catch (error) {
+      await _clearStoredSession();
+      _setUnauthenticated();
+      if (kDebugMode) {
+        debugPrint('session-restore failed: $error');
+      }
+    }
+  }
+
+  Future<void> _activateAuthenticatedSession(AuthSession session) async {
+    state = SessionState.authenticated(session);
+    await _runBootstrapTask(
+      () => ref.read(currentUserViewsProvider.notifier).refresh(),
+    );
+    await _runBootstrapTask(
+      () => ref.read(notificationsProvider.notifier).load(),
+    );
+    await _runBootstrapTask(
+      () => ref
+          .read(pushNotificationServiceProvider)
+          .activate(session.sessionToken),
+    );
+    ref.read(postLoginBootstrapProvider.notifier).state = true;
+  }
+
+  Future<void> _runBootstrapTask(Future<void> Function() task) async {
+    try {
+      await task();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('session-bootstrap task failed: $error');
+      }
+    }
+  }
+
+  Future<void> _clearStoredSession() async {
+    try {
+      await ref.read(sessionStorageProvider).clear();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('session-storage clear failed: $error');
+      }
+    }
+  }
+
+  Future<void> _persistUpdatedSession(AuthSession session) async {
+    try {
+      await ref.read(sessionStorageProvider).write(session);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('session-storage update failed: $error');
+      }
+    }
+  }
+
+  void _setUnauthenticated() {
     ref.read(postLoginBootstrapProvider.notifier).state = false;
     state = const SessionState.unauthenticated();
   }

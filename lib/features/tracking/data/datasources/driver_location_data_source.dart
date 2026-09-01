@@ -22,7 +22,7 @@ class DriverLocationDataSource {
           'accuracy': _nonNegativeFinite(position.accuracy),
           'speed': _nonNegativeFinite(position.speed),
           'heading': _heading(position.heading),
-          'captured_at': DateTime.now().toUtc().toIso8601String(),
+          'captured_at': position.timestamp.toUtc().toIso8601String(),
         },
       );
     } on ApiException catch (error) {

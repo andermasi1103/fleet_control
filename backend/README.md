@@ -1,6 +1,6 @@
-# Fleet Control backend
+# MasiTrack API
 
-Backend propio de Fleet Control con autenticación y sesiones locales sobre PostgreSQL.
+Backend propio de MasiTrack con autenticación y sesiones locales sobre PostgreSQL.
 
 ## Requisitos
 
@@ -28,7 +28,9 @@ secreto local.
 
 Variables disponibles:
 
-- `PORT` y `HOST`: dirección de escucha de la API.
+- `PORT` y `BACKEND_HOST`: dirección de escucha de la API. `BACKEND_HOST`
+  acepta `0.0.0.0` para una UAT LAN controlada y por defecto permanece en
+  `127.0.0.1`; `HOST` se conserva como alias compatible.
 - `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_SSL`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_SSL_CA`: conexión a PostgreSQL.
 - `API_LOG_LEVEL`: nivel de registro de Fastify.
 - `CORS_ALLOWED_ORIGINS`: orígenes web permitidos, separados por comas. Para Flutter Web local use un puerto fijo, por ejemplo `http://localhost:8080,http://127.0.0.1:8080`; no use `*`.

@@ -20,7 +20,16 @@ privada. Active TLS verificado (`DATABASE_SSL=true` y
    `database/security/fleet_app_rls.sql` con la misma identidad de migración.
 3. Ejecute `pnpm run db:migrate` desde `backend` con una identidad operativa
    de migración, distinta de Fastify, autorizada a asumir `fleet_owner`.
-   `fleet_owner` no tiene login y no debe asignarse a `fleet_app`.
+   El runner lee exclusivamente `MIGRATION_DATABASE_HOST`,
+   `MIGRATION_DATABASE_PORT` (opcional; 5432 por defecto),
+   `MIGRATION_DATABASE_NAME`, `MIGRATION_DATABASE_USER` y
+   `MIGRATION_DATABASE_PASSWORD`, `MIGRATION_DATABASE_SSL`,
+   `MIGRATION_DATABASE_SSL_REJECT_UNAUTHORIZED` y
+   `MIGRATION_DATABASE_SSL_CA`; el usuario debe ser `fleet_migrator`.
+   Provea esas credenciales efímeramente desde la terminal o el gestor de
+   secretos de CI. Fastify conserva `DATABASE_*` con `fleet_app`; las
+   utilidades UAT usan por separado `UAT_MIGRATOR_*`. `fleet_owner` no tiene
+   login y no debe asignarse a `fleet_app`.
 4. Valide `pnpm run db:check` con `fleet_app`.
 5. Reinicie Fastify. El runtime nunca ejecuta DDL automáticamente.
 

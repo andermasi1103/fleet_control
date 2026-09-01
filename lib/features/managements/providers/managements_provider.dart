@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../authentication/providers/session_provider.dart';
+import '../../tracking/providers/driver_operational_state_provider.dart';
 import '../data/datasources/managements_data_source.dart';
 import '../data/dtos/management_dto.dart';
 
@@ -99,7 +100,12 @@ class ManagementsNotifier extends Notifier<ManagementsState> {
     }
     state = state.copyWith(saving: true, clearError: true);
     try {
-      await ref.read(managementsSourceProvider).status(t!, id, value);
+      final management = await ref
+          .read(managementsSourceProvider)
+          .status(t!, id, value);
+      ref
+          .read(driverOperationalStateProvider.notifier)
+          .updateFromManagement(management);
       state = state.copyWith(saving: false);
       return true;
     } on Failure catch (e) {

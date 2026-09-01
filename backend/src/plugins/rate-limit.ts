@@ -11,6 +11,10 @@ export const trackingRateLimit = {
   rateLimit: { max: 120, timeWindow: 60_000 }
 };
 
+export const presenceRateLimit = {
+  rateLimit: { max: 6, timeWindow: 60_000 }
+};
+
 export async function registerRateLimiting(app: FastifyInstance): Promise<void> {
   await app.register(rateLimit, {
     global: true,

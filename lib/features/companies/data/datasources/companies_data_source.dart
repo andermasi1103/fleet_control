@@ -29,16 +29,26 @@ class CompaniesDataSource {
   Future<CompanyDto> createCompany({
     required String sessionToken,
     required String nombre,
-  }) => _save('/api/companies', sessionToken, {'nombre': nombre});
+    String localMarkerIcon = 'storefront',
+    String? localMarkerColor,
+  }) => _save('/api/companies', sessionToken, {
+    'nombre': nombre,
+    'local_marker_icon': localMarkerIcon,
+    'local_marker_color': localMarkerColor,
+  });
 
   Future<CompanyDto> updateCompany({
     required String sessionToken,
     required String id,
     required String nombre,
     required bool isActive,
+    String localMarkerIcon = 'storefront',
+    String? localMarkerColor,
   }) => _save('/api/companies/$id', sessionToken, {
     'nombre': nombre,
     'activo': isActive,
+    'local_marker_icon': localMarkerIcon,
+    'local_marker_color': localMarkerColor,
   }, patch: true);
 
   Future<CompanyDto> _save(

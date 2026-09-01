@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fleet_control/core/network/api_client.dart';
 import 'package:fleet_control/features/authentication/data/datasources/fastify_auth_data_source.dart';
+import 'package:fleet_control/features/authentication/data/session_storage.dart';
 import 'package:fleet_control/features/authentication/domain/entities/auth_session.dart';
 import 'package:fleet_control/features/authentication/domain/entities/authenticated_user.dart';
 import 'package:fleet_control/features/authentication/providers/session_provider.dart';
@@ -18,6 +19,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('login Fastify se adapta a AuthSession', () async {
     final adapter = _RecordingAdapter(body: _loginResponse());
     final source = FastifyAuthDataSource(_api(adapter));
@@ -75,6 +78,40 @@ void main() {
     expect(adapter.request?.path, '/api/me/views');
     expect(adapter.request?.headers['Authorization'], 'Bearer session-token');
     expect(views, {AppViewCode.home, AppViewCode.fleetMap});
+  });
+
+  test(
+    'la sesión persistida se valida con el endpoint protegido existente',
+    () async {
+      final adapter = _RecordingAdapter(
+        body: {
+          'views': ['home'],
+        },
+      );
+
+      await FastifyAuthDataSource(
+        _api(adapter),
+      ).validateSession(sessionToken: 'session-token');
+
+      expect(adapter.request?.method, 'GET');
+      expect(adapter.request?.path, '/api/me/views');
+      expect(adapter.request?.headers['Authorization'], 'Bearer session-token');
+    },
+  );
+
+  test('una sesión persistida revocada se rechaza', () async {
+    final source = FastifyAuthDataSource(
+      _api(
+        _RecordingAdapter(statusCode: 401, body: {'error': 'invalid_session'}),
+      ),
+    );
+
+    await expectLater(
+      source.validateSession(sessionToken: 'revoked-token'),
+      throwsA(
+        predicate((error) => error.toString().contains('Tu sesión venció.')),
+      ),
+    );
   });
 
   test(
@@ -168,6 +205,10 @@ void main() {
         'heading',
         'captured_at',
       });
+      expect(
+        adapter.request?.data['captured_at'],
+        DateTime.utc(2030).toIso8601String(),
+      );
     },
   );
 
@@ -203,6 +244,7 @@ void main() {
             fastifyAuthDataSourceProvider.overrideWithValue(
               FastifyAuthDataSource(_api(adapter)),
             ),
+            sessionStorageProvider.overrideWithValue(_MemorySessionStorage()),
             sessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
           ],
         );
@@ -223,6 +265,7 @@ void main() {
   test('cambio de contraseña exitoso limpia la sesión local', () {
     final container = ProviderContainer(
       overrides: [
+        sessionStorageProvider.overrideWithValue(_MemorySessionStorage()),
         sessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
       ],
     );
@@ -269,6 +312,23 @@ class _AuthenticatedSessionNotifier extends SessionNotifier {
       expiresAt: DateTime(2030),
     ),
   );
+}
+
+class _MemorySessionStorage implements SessionStorage {
+  AuthSession? session;
+
+  @override
+  Future<void> clear() async {
+    session = null;
+  }
+
+  @override
+  Future<AuthSession?> read() async => session;
+
+  @override
+  Future<void> write(AuthSession value) async {
+    session = value;
+  }
 }
 
 class _RecordingAdapter implements HttpClientAdapter {

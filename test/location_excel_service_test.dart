@@ -17,7 +17,15 @@ void main() {
   });
 
   test('reporta encabezado faltante', () {
-    final bytes = _workbook(['codigo', 'nombre']);
+    final bytes = _workbook([
+      'codigo',
+      'nombre',
+      'descripcion',
+      'direccion',
+      'longitud',
+      'radio_geocerca_metros',
+      'activo',
+    ]);
 
     final preview = service.parse(bytes);
 
@@ -26,15 +34,21 @@ void main() {
   });
 
   test('reporta coordenadas, radio y duplicado inválidos', () {
-    final bytes = _workbook(LocationExcelService.headers, rows: [
-      ['LOC-1', 'Uno', '', '', '-91', '-181', '9', 'true'],
-      ['loc-1', 'Dos', '', '', '-25.3', '-57.6', '150', 'true'],
-    ]);
+    final bytes = _workbook(
+      LocationExcelService.headers,
+      rows: [
+        ['LOC-1', 'Uno', '', '', '-91', '-181', '9', 'true'],
+        ['loc-1', 'Dos', '', '', '-25.3', '-57.6', '150', 'true'],
+      ],
+    );
 
     final preview = service.parse(bytes);
 
     expect(preview.errorCount, 2);
-    expect(preview.rows.first.error, allOf(contains('Latitud'), contains('Longitud'), contains('Radio')));
+    expect(
+      preview.rows.first.error,
+      allOf(contains('Latitud'), contains('Longitud'), contains('Radio')),
+    );
     expect(preview.rows.last.error, contains('duplicado'));
   });
 
@@ -42,18 +56,30 @@ void main() {
     final rows = List.generate(
       501,
       (index) => [
-        'LOC-$index', 'Local $index', '', '', '-25.3', '-57.6', '150', 'true',
+        'LOC-$index',
+        'Local $index',
+        '',
+        '',
+        '-25.3',
+        '-57.6',
+        '150',
+        'true',
       ],
     );
 
-    final preview = service.parse(_workbook(LocationExcelService.headers, rows: rows));
+    final preview = service.parse(
+      _workbook(LocationExcelService.headers, rows: rows),
+    );
 
     expect(preview.fileError, contains('500'));
     expect(preview.canImport, isFalse);
   });
 }
 
-Uint8List _workbook(List<String> headers, {List<List<String>> rows = const []}) {
+Uint8List _workbook(
+  List<String> headers, {
+  List<List<String>> rows = const [],
+}) {
   final workbook = Excel.createExcel();
   final sheet = workbook['Locales'];
   sheet.appendRow(headers.map(TextCellValue.new).toList(growable: false));

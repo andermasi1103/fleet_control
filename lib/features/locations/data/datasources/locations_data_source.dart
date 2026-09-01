@@ -17,6 +17,32 @@ class LocationsDataSource {
     (json) => LocationDto.fromJson(json),
     'No fue posible cargar los locales.',
   );
+
+  Future<List<LocationDto>> getMapLocations({
+    required String sessionToken,
+  }) async {
+    try {
+      final values = (await _apiClient.get<Map<String, dynamic>>(
+        '/api/locations',
+        bearerToken: sessionToken,
+      )).data?['locations'];
+      if (values is! List) {
+        return _invalid('No fue posible cargar los locales.');
+      }
+      final locations = <LocationDto>[];
+      for (final value in values) {
+        try {
+          locations.add(LocationDto.fromJson(_map(value)));
+        } on FormatException {
+          // Un local inválido no debe impedir visualizar los restantes.
+        }
+      }
+      return locations;
+    } on ApiException catch (error) {
+      throw _failure(error.statusCode, 'No fue posible cargar los locales.');
+    }
+  }
+
   Future<List<CompanyOptionDto>> getCompanies({
     required String sessionToken,
   }) async => _list(

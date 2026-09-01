@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_router.dart';
 import 'theme.dart';
 import '../features/tracking/providers/driver_tracking_provider.dart';
+import '../features/tracking/providers/driver_operational_state_provider.dart';
+import '../features/tracking/providers/driver_presence_provider.dart';
 import '../features/driver_orders/providers/driver_orders_provider.dart';
 import '../features/notifications/providers/notifications_provider.dart';
 import '../features/authentication/providers/session_provider.dart';
@@ -22,11 +26,17 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(driverOperationalStateProvider);
     ref.read(driverTrackingProvider);
-    Future.microtask(() => ref.read(pushNotificationServiceProvider).start(
-          onForegroundMessage: _handleForegroundMessage,
-          onNotificationOpened: _handleNotificationOpened,
-        ));
+    ref.read(driverPresenceProvider);
+    Future.microtask(
+      () => ref
+          .read(pushNotificationServiceProvider)
+          .start(
+            onForegroundMessage: _handleForegroundMessage,
+            onNotificationOpened: _handleNotificationOpened,
+          ),
+    );
   }
 
   @override
@@ -37,7 +47,26 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    ref.read(driverTrackingProvider.notifier).handleLifecycleChange(state);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_resumeDriverTracking());
+      return;
+    }
+    unawaited(
+      ref.read(driverPresenceProvider.notifier).handleLifecycleChange(state),
+    );
+    unawaited(
+      ref.read(driverTrackingProvider.notifier).handleLifecycleChange(state),
+    );
+  }
+
+  Future<void> _resumeDriverTracking() async {
+    await ref.read(driverOperationalStateProvider.notifier).refresh();
+    await ref
+        .read(driverTrackingProvider.notifier)
+        .handleLifecycleChange(AppLifecycleState.resumed);
+    await ref
+        .read(driverPresenceProvider.notifier)
+        .handleLifecycleChange(AppLifecycleState.resumed);
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
@@ -70,7 +99,7 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Fleet Control',
+      title: 'MasiTrack',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       scaffoldMessengerKey: _messengerKey,

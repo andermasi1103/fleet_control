@@ -2,11 +2,12 @@
   "name": "fleet-control-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Backend base de Fleet Control con Fastify y PostgreSQL.",
+  "description": "MasiTrack API con Fastify y PostgreSQL.",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24 <25"
   },
+  "packageManager": "pnpm@11.23.0",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
@@ -16,6 +17,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "uat:seed": "pnpm run build && node dist/scripts/uat-fixtures.js seed",
     "uat:cleanup": "pnpm run build && node dist/scripts/uat-fixtures.js cleanup",
+    "uat:presence": "pnpm run build && node dist/scripts/uat-presence.js",
     "security:apply-rls": "pnpm run build && node dist/scripts/uat-fixtures.js rls",
     "db:check-location": "tsx scripts/check-driver-location.ts",
     "test": "tsx --test test/auth.test.ts test/bootstrap.test.ts test/tracking.test.ts test/administration.test.ts test/security.test.ts",

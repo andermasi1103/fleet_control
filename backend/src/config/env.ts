@@ -1,13 +1,20 @@
 import 'dotenv/config';
+import { isIP } from 'node:net';
 
 import { z } from 'zod';
 
 const booleanFromEnv = z.enum(['true', 'false']).transform((value) => value === 'true');
 
+const backendHost = z.string().trim().min(1).refine((value) => {
+  if (value === 'localhost' || isIP(value) !== 0) return true;
+  return /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(value);
+}, 'BACKEND_HOST must be a hostname or IP address without a protocol or port.');
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
-  HOST: z.string().min(1).default('127.0.0.1'),
+  HOST: backendHost.optional(),
+  BACKEND_HOST: backendHost.optional(),
   DATABASE_HOST: z.string().min(1).default('localhost'),
   DATABASE_PORT: z.coerce.number().int().min(1).max(65_535).default(5432),
   DATABASE_NAME: z.string().min(1).default('fleet_control_db'),
@@ -42,7 +49,7 @@ const envSchema = z.object({
   if (value.NODE_ENV !== 'production') return;
 
   const requiredProductionVariables = [
-    'PORT', 'HOST', 'DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME',
+    'PORT', 'DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME',
     'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_SSL', 'API_LOG_LEVEL',
     'CORS_ALLOWED_ORIGINS', 'SESSION_TTL_HOURS'
   ] as const;
@@ -50,6 +57,9 @@ const envSchema = z.object({
     if (!process.env[key]?.trim()) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: 'Must be set explicitly in production.' });
     }
+  }
+  if (!process.env.BACKEND_HOST?.trim() && !process.env.HOST?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['BACKEND_HOST'], message: 'BACKEND_HOST or HOST must be set explicitly in production.' });
   }
 
   if (value.DATABASE_USER === 'postgres') {
@@ -69,7 +79,10 @@ if (!parsedEnv.success) {
   throw new Error('Invalid environment configuration. Review backend/.env.');
 }
 
-export const env = parsedEnv.data;
+export const env = {
+  ...parsedEnv.data,
+  HOST: parsedEnv.data.BACKEND_HOST ?? parsedEnv.data.HOST ?? '127.0.0.1'
+};
 
 export const corsOrigins = (env.CORS_ALLOWED_ORIGINS ?? env.CORS_ORIGIN ?? '')
   .split(',')

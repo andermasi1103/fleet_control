@@ -88,6 +88,7 @@ revoke all on function public.fleet_control_set_user_locations(uuid, uuid[]) fro
 revoke all on function public.fleet_control_set_user_vehicle(uuid, uuid) from public;
 revoke all on function public.fleet_control_set_supervisor_choferes(uuid, uuid[]) from public;
 revoke all on function public.fleet_control_update_driver_location(uuid, double precision, double precision, double precision, double precision, double precision, timestamptz) from public;
+revoke all on function public.fleet_control_touch_driver_presence(uuid) from public;
 
 grant execute on function public.login_usuario(text, text) to fleet_app;
 grant execute on function public.fleet_control_verify_usuario_password(uuid, text) to fleet_app;
@@ -101,6 +102,7 @@ grant execute on function public.fleet_control_set_user_locations(uuid, uuid[]) 
 grant execute on function public.fleet_control_set_user_vehicle(uuid, uuid) to fleet_app;
 grant execute on function public.fleet_control_set_supervisor_choferes(uuid, uuid[]) to fleet_app;
 grant execute on function public.fleet_control_update_driver_location(uuid, double precision, double precision, double precision, double precision, double precision, timestamptz) to fleet_app;
+grant execute on function public.fleet_control_touch_driver_presence(uuid) to fleet_app;
 
 -- SECURITY DEFINER routines run with fleet_owner's deliberately limited
 -- database privileges, never with the PostgreSQL cluster superuser.
@@ -116,6 +118,7 @@ alter function public.fleet_control_set_user_locations(uuid, uuid[]) owner to fl
 alter function public.fleet_control_set_user_vehicle(uuid, uuid) owner to fleet_owner;
 alter function public.fleet_control_set_supervisor_choferes(uuid, uuid[]) owner to fleet_owner;
 alter function public.fleet_control_update_driver_location(uuid, double precision, double precision, double precision, double precision, double precision, timestamptz) owner to fleet_owner;
+alter function public.fleet_control_touch_driver_presence(uuid) owner to fleet_owner;
 
 -- fleet_owner must own the existing application objects to run future ALTER
 -- migrations. The public schema is Fleet Control's application schema; this

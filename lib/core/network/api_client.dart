@@ -1,11 +1,17 @@
 import 'package:dio/dio.dart';
 
 class ApiException implements Exception {
-  const ApiException({required this.message, this.statusCode, this.code});
+  const ApiException({
+    required this.message,
+    this.statusCode,
+    this.code,
+    this.type,
+  });
 
   final String message;
   final int? statusCode;
   final String? code;
+  final DioExceptionType? type;
 }
 
 class ApiClient {
@@ -30,6 +36,7 @@ class ApiClient {
       throw ApiException(
         statusCode: error.response?.statusCode,
         code: payload?['error']?.toString(),
+        type: error.type,
         message:
             payload?['message']?.toString() ??
             error.message ??

@@ -72,6 +72,24 @@ void main() {
     expect(import.request?.headers['Authorization'], 'Bearer token');
   });
 
+  test('el mapa omite locales inválidos sin ocultar locales válidos', () async {
+    final invalid = {..._location(), 'id': 'invalid', 'latitud': 91};
+    final source = LocationsDataSource(
+      _api(
+        _Adapter(
+          body: {
+            'locations': [_location(), invalid],
+          },
+        ),
+      ),
+    );
+
+    final locations = await source.getMapLocations(sessionToken: 'token');
+
+    expect(locations, hasLength(1));
+    expect(locations.single.id, 'location-1');
+  });
+
   test('users, roles y user-locations usan rutas REST', () async {
     final roles = _Adapter(
       body: {

@@ -21,6 +21,10 @@ class FakeDatabase implements Database {
       expires_at: '2030-01-01T00:00:00.000Z'
     }]);
     if (text.includes('SET last_used_at = now()')) return this.result<Row>([]);
+    if (text.includes('FROM public.empresas')) return this.result<Row>([{
+      id: companyId, nombre: 'Empresa de prueba', activo: true,
+      local_marker_icon: 'storefront', local_marker_color: '#1565C0'
+    }]);
     if (text.includes('FROM public.vehiculos v')) return this.result<Row>([{ id: '00000000-0000-0000-0000-000000000105', empresa_id: companyId, patente: 'TEST-1' }]);
     if (text.includes('FROM public.roles ORDER BY')) return this.result<Row>([{ id: '00000000-0000-0000-0000-000000000106', codigo: 'admin', nombre: 'Admin', activo: true }]);
     throw new Error(`Unexpected query in test: ${text}`);
@@ -66,5 +70,26 @@ test('los payloads administrativos son estrictos y no admiten datos de actor', a
   const app = await buildApp({ database });
   const response = await app.inject({ method: 'POST', url: '/api/companies', headers, payload: { nombre: 'Prueba', actor_id: userId } });
   assert.equal(response.statusCode, 400);
+  await app.close();
+});
+
+test('la configuración visual de locales respeta empresa y catálogo cerrado', async () => {
+  const database = new FakeDatabase();
+  const app = await buildApp({ database });
+
+  const invalid = await app.inject({
+    method: 'POST',
+    url: '/api/companies',
+    headers,
+    payload: { nombre: 'Prueba', local_marker_icon: 'arbitrario' }
+  });
+  assert.equal(invalid.statusCode, 400);
+
+  const companies = await app.inject({ method: 'GET', url: '/api/companies', headers });
+  assert.equal(companies.statusCode, 200);
+  assert.equal(companies.json().companies[0].local_marker_icon, 'storefront');
+  assert.equal(companies.json().companies[0].local_marker_color, '#1565C0');
+  const scope = database.queries.find((entry) => entry.text.includes('FROM public.empresas'));
+  assert.deepEqual(scope?.values, [companyId]);
   await app.close();
 });

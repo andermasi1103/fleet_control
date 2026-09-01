@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { QueryResultRow } from 'pg';
 
 import type { Database } from '../auth/auth.types.js';
-import { trackingRateLimit } from '../plugins/rate-limit.js';
-import { driverLocationSchema } from './tracking.schemas.js';
+import { presenceRateLimit, trackingRateLimit } from '../plugins/rate-limit.js';
+import { driverLocationSchema, driverPresenceSchema } from './tracking.schemas.js';
 
 type DriverLocationRow = QueryResultRow & {
   chofer_usuario_id: string;
@@ -40,6 +40,48 @@ function toLocationResponse(row: DriverLocationRow) {
 }
 
 export function registerTrackingRoutes(app: FastifyInstance, database: Database): void {
+  app.post('/api/driver/presence', {
+    preHandler: app.requireFleetSession,
+    config: presenceRateLimit
+  }, async (request, reply) => {
+    const session = request.fleetSession;
+    if (!session) {
+      return noStore(reply).code(401).send({
+        error: 'invalid_session',
+        message: 'Sesión inválida o expirada.'
+      });
+    }
+    if (session.roleCode !== 'chofer') {
+      return noStore(reply).code(403).send({
+        error: 'forbidden',
+        message: 'No tienes permiso para informar presencia.'
+      });
+    }
+    if (!driverPresenceSchema.safeParse(request.body).success) {
+      return noStore(reply).code(400).send({
+        error: 'invalid_request',
+        message: 'La presencia no acepta datos del cliente.'
+      });
+    }
+
+    try {
+      await database.query(
+        'SELECT public.fleet_control_touch_driver_presence($1::uuid)',
+        [session.userId]
+      );
+      return noStore(reply).code(204).send();
+    } catch (error) {
+      const databaseError = error as DatabaseError;
+      if (databaseError.message === 'forbidden') {
+        return noStore(reply).code(403).send({
+          error: 'forbidden',
+          message: 'No tienes permiso para informar presencia.'
+        });
+      }
+      throw error;
+    }
+  });
+
   app.post('/api/driver/location', {
     preHandler: app.requireFleetSession,
     config: trackingRateLimit

@@ -18,7 +18,9 @@ class CompanyFormScreen extends ConsumerStatefulWidget {
 class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _markerColorController;
   late bool _isActive;
+  late String _markerIcon;
 
   bool get _isEditing => widget.initialCompany != null;
 
@@ -28,12 +30,17 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
     _nameController = TextEditingController(
       text: widget.initialCompany?.nombre ?? '',
     );
+    _markerColorController = TextEditingController(
+      text: widget.initialCompany?.localMarkerColor ?? '',
+    );
     _isActive = widget.initialCompany?.isActive ?? true;
+    _markerIcon = widget.initialCompany?.localMarkerIcon ?? 'storefront';
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _markerColorController.dispose();
     super.dispose();
   }
 
@@ -71,6 +78,59 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
                     validator: (value) => value == null || value.trim().isEmpty
                         ? 'Ingresa el nombre de la empresa.'
                         : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _markerIcon,
+                    decoration: const InputDecoration(
+                      labelText: 'Icono de punto de venta',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'store', child: Text('Tienda')),
+                      DropdownMenuItem(
+                        value: 'storefront',
+                        child: Text('Fachada de tienda'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'business',
+                        child: Text('Negocio'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'grocery',
+                        child: Text('Almacén'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'shopping',
+                        child: Text('Compras'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'location',
+                        child: Text('Ubicación'),
+                      ),
+                    ],
+                    onChanged: state.isSaving
+                        ? null
+                        : (value) => setState(
+                            () => _markerIcon = value ?? 'storefront',
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _markerColorController,
+                    decoration: const InputDecoration(
+                      labelText: 'Color de punto de venta',
+                      hintText: '#RRGGBB (opcional)',
+                    ),
+                    enabled: !state.isSaving,
+                    textCapitalization: TextCapitalization.characters,
+                    validator: (value) {
+                      final color = value?.trim() ?? '';
+                      if (color.isEmpty ||
+                          RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(color)) {
+                        return null;
+                      }
+                      return 'Usa el formato #RRGGBB.';
+                    },
                   ),
                   if (_isEditing) ...[
                     const SizedBox(height: 12),
@@ -118,8 +178,14 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
             id: widget.initialCompany!.id,
             nombre: _nameController.text.trim(),
             isActive: _isActive,
+            localMarkerIcon: _markerIcon,
+            localMarkerColor: _optionalColor,
           )
-        : await notifier.createCompany(nombre: _nameController.text.trim());
+        : await notifier.createCompany(
+            nombre: _nameController.text.trim(),
+            localMarkerIcon: _markerIcon,
+            localMarkerColor: _optionalColor,
+          );
     if (!mounted) return;
     if (success) {
       context.pop(true);
@@ -134,6 +200,11 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
         backgroundColor: Theme.of(context).colorScheme.error,
       ),
     );
+  }
+
+  String? get _optionalColor {
+    final color = _markerColorController.text.trim();
+    return color.isEmpty ? null : color.toUpperCase();
   }
 }
 

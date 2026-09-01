@@ -42,10 +42,9 @@ export function registerInsightsRoutes(app: FastifyInstance, database: Database)
       `SELECT u.id AS driver_user_id,u.nombre AS driver_name,u.usuario AS driver_username,u.empresa_id AS company_id,
               m.id AS management_id,m.estado AS management_status,
               COALESCE(mv.id,hv.id) AS vehicle_id,COALESCE(mv.patente,hv.patente) AS vehicle_plate,COALESCE(mv.tipo_vehiculo,hv.tipo_vehiculo) AS vehicle_type,
-              cl.latitud AS latitude,cl.longitud AS longitude,cl.precision_metros AS accuracy,cl.velocidad_mps AS speed,cl.rumbo_grados AS heading,cl.captured_at,
-              CASE WHEN cl.captured_at IS NULL THEN 'offline'
-                   WHEN now() - cl.captured_at <= interval '2 minutes' THEN 'online'
-                   WHEN now() - cl.captured_at <= interval '10 minutes' THEN 'stale'
+              cl.latitud AS latitude,cl.longitud AS longitude,cl.precision_metros AS accuracy,cl.velocidad_mps AS speed,cl.rumbo_grados AS heading,cl.captured_at,cl.last_seen_at,
+              CASE WHEN cl.last_seen_at IS NULL THEN 'offline'
+                   WHEN now() - cl.last_seen_at <= interval '2 minutes' THEN 'online'
                    ELSE 'offline' END AS connection_status,
               COALESCE(m.estado,'disponible') AS operational_status
        FROM public.usuarios u

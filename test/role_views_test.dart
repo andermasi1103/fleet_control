@@ -1,4 +1,5 @@
 import 'package:fleet_control/app/app_router.dart';
+import 'package:fleet_control/features/authentication/data/session_storage.dart';
 import 'package:fleet_control/features/authentication/domain/entities/auth_session.dart';
 import 'package:fleet_control/features/authentication/domain/entities/authenticated_user.dart';
 import 'package:fleet_control/features/authentication/providers/session_provider.dart';
@@ -11,6 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('parsea únicamente códigos de vista soportados', () {
     final views = AppViewCode.fromValues([
       'home',
@@ -36,6 +39,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sessionProvider.overrideWith(_TestSessionNotifier.new),
+        sessionStorageProvider.overrideWithValue(_MemorySessionStorage()),
         roleViewsDataSourceProvider.overrideWithValue(_FakeRoleViewsGateway()),
       ],
     );
@@ -82,10 +86,23 @@ class _TestSessionNotifier extends SessionNotifier {
   );
 }
 
+class _MemorySessionStorage implements SessionStorage {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<AuthSession?> read() async => null;
+
+  @override
+  Future<void> write(AuthSession session) async {}
+}
+
 class _FakeRoleViewsGateway implements RoleViewsGateway {
   @override
-  Future<Set<AppViewCode>> getMyViews({required String sessionToken}) async =>
-      {AppViewCode.home, AppViewCode.fleetMap};
+  Future<Set<AppViewCode>> getMyViews({required String sessionToken}) async => {
+    AppViewCode.home,
+    AppViewCode.fleetMap,
+  };
 
   @override
   Future<RoleViewsMatrixDto> getMatrix({required String sessionToken}) {

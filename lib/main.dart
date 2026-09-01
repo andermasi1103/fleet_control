@@ -8,7 +8,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Native/web Firebase options are supplied outside source control. A missing
-  // configuration leaves push disabled but does not prevent Fleet Control from starting.
+  // configuration leaves push disabled but does not prevent MasiTrack from starting.
   try {
     await Firebase.initializeApp();
   } catch (_) {}

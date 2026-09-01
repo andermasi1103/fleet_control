@@ -4,7 +4,15 @@ const uuid = z.string().uuid();
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 export const idParamsSchema = z.object({ id: uuid }).strict();
-export const companySchema = z.object({ nombre: z.string().trim().min(1).max(160), activo: z.boolean().optional() }).strict();
+export const localMarkerIcons = ['store', 'storefront', 'business', 'grocery', 'shopping', 'location'] as const;
+const localMarkerIconSchema = z.enum(localMarkerIcons);
+const localMarkerColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+export const companySchema = z.object({
+  nombre: z.string().trim().min(1).max(160),
+  activo: z.boolean().optional(),
+  local_marker_icon: localMarkerIconSchema.optional(),
+  local_marker_color: localMarkerColorSchema.nullable().optional()
+}).strict();
 export const companyPatchSchema = companySchema.partial().refine((value) => Object.keys(value).length > 0);
 
 const locationFields = z.object({

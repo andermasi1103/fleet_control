@@ -72,7 +72,7 @@ class _DriverOrdersScreenState extends ConsumerState<DriverOrdersScreen> {
             ),
           ),
         );
-      context.go('/managements/${management.id}');
+      context.push('/managements/${management.id}');
       return;
     }
 

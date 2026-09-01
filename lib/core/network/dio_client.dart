@@ -7,7 +7,7 @@ import 'interceptors/logging_interceptor.dart';
 class DioClient {
   DioClient({required AppConfig config});
 
-  /// Cliente único para los endpoints Fastify de Fleet Control.
+  /// Cliente único para los endpoints de MasiTrack API.
   Dio createBackendClient({required AppConfig config}) {
     final dio = Dio(
       BaseOptions(
