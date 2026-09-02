@@ -36,7 +36,7 @@ class _UserLocationsScreenState extends ConsumerState<UserLocationsScreen> {
     final state = ref.watch(userLocationsProvider);
 
     return AppShell(
-      title: 'Asignar locales',
+      title: 'Locales asignados',
       showHomeAction: true,
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -48,6 +48,13 @@ class _UserLocationsScreenState extends ConsumerState<UserLocationsScreen> {
               children: [
                 _UserSummary(user: widget.user),
                 const SizedBox(height: 16),
+                if (!state.isLoading &&
+                    state.errorMessage == null &&
+                    state.locations.isNotEmpty &&
+                    state.selectedLocationIds.isEmpty) ...[
+                  const _NoAssignedLocations(),
+                  const SizedBox(height: 16),
+                ],
                 if (state.errorMessage != null) ...[
                   _ErrorMessage(message: state.errorMessage!),
                   const SizedBox(height: 16),
@@ -167,7 +174,7 @@ class _UserSummary extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Locales de ${user.nombre}',
+            'Locales asignados de ${user.nombre}',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
@@ -222,6 +229,18 @@ class _EmptyLocations extends StatelessWidget {
         'No hay locales disponibles para este usuario.',
         textAlign: TextAlign.center,
       ),
+    ),
+  );
+}
+
+class _NoAssignedLocations extends StatelessWidget {
+  const _NoAssignedLocations();
+
+  @override
+  Widget build(BuildContext context) => const Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Text('Este usuario no tiene locales asignados.'),
     ),
   );
 }

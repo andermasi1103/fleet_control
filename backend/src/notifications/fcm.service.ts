@@ -83,7 +83,7 @@ const httpV1Transport: FcmTransport = async (device, message, account) => {
 
 export async function notifyNewOrder(database: Database, order: NewOrder, options: { transport?: FcmTransport; account?: FirebaseServiceAccount | null } = {}): Promise<void> {
   try {
-    const drivers = await database.query<Row>(`SELECT u.id FROM public.usuarios u JOIN public.roles r ON r.id=u.rol_id WHERE u.empresa_id=$1::uuid AND u.activo=true AND r.codigo='chofer'`, [order.empresa_id]);
+    const drivers = await database.query<Row>(`SELECT u.id FROM public.usuario_locales ul JOIN public.usuarios u ON u.id=ul.usuario_id JOIN public.roles r ON r.id=u.rol_id JOIN public.locales l ON l.id=ul.local_id WHERE ul.local_id=$1::uuid AND u.empresa_id=$2::uuid AND l.empresa_id=$2::uuid AND u.activo=true AND r.codigo='chofer'`, [order.local_id, order.empresa_id]);
     const driverIds = drivers.rows.map((row) => typeof row.id === 'string' ? row.id : '').filter(Boolean);
     if (!driverIds.length) return;
     const local = await database.query<Row>('SELECT nombre FROM public.locales WHERE id=$1::uuid', [order.local_id]);
