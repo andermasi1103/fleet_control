@@ -6,6 +6,8 @@ import '../../authentication/providers/session_provider.dart';
 import '../../companies/providers/companies_provider.dart'
     show companiesDataSourceProvider;
 import '../data/datasources/users_data_source.dart';
+import '../data/dtos/role_option_dto.dart';
+import '../user_access_policy.dart';
 import 'users_state.dart';
 
 final usersDataSourceProvider = Provider<UsersDataSource>((ref) {
@@ -36,7 +38,10 @@ class UsersNotifier extends Notifier<UsersState> {
     try {
       final dataSource = ref.read(usersDataSourceProvider);
       final users = await dataSource.getUsers(sessionToken: token);
-      final roles = await dataSource.getRoles(sessionToken: token);
+      final roleCode = ref.read(sessionProvider).session?.user.role;
+      final roles = canManageUsers(roleCode)
+          ? await dataSource.getRoles(sessionToken: token)
+          : const <RoleOptionDto>[];
       var companies = state.companies;
       try {
         companies = await ref

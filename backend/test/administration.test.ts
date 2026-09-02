@@ -7,7 +7,10 @@ import { buildApp } from '../src/app.js';
 import type { Database, DatabaseQueryResult } from '../src/auth/auth.types.js';
 
 const companyId = '00000000-0000-0000-0000-000000000101';
+const otherCompanyId = '00000000-0000-0000-0000-000000000107';
 const userId = '00000000-0000-0000-0000-000000000102';
+const otherUserId = '00000000-0000-0000-0000-000000000108';
+const superAdminRoleId = '00000000-0000-0000-0000-000000000109';
 
 class FakeDatabase implements Database {
   roleCode = 'admin';
@@ -26,7 +29,23 @@ class FakeDatabase implements Database {
       local_marker_icon: 'storefront', local_marker_color: '#1565C0'
     }]);
     if (text.includes('FROM public.vehiculos v')) return this.result<Row>([{ id: '00000000-0000-0000-0000-000000000105', empresa_id: companyId, patente: 'TEST-1' }]);
-    if (text.includes('FROM public.roles ORDER BY')) return this.result<Row>([{ id: '00000000-0000-0000-0000-000000000106', codigo: 'admin', nombre: 'Admin', activo: true }]);
+    if (text.includes('SELECT id, codigo FROM public.roles WHERE id')) return this.result<Row>([{ id: superAdminRoleId, codigo: 'super_admin' }]);
+    if (text.includes('FROM public.roles') && text.includes('ORDER BY nivel,codigo')) {
+      const roles = [
+        { id: '00000000-0000-0000-0000-000000000110', codigo: 'user', nombre: 'Usuario', activo: true },
+        { id: '00000000-0000-0000-0000-000000000111', codigo: 'local', nombre: 'Local', activo: true },
+        { id: '00000000-0000-0000-0000-000000000112', codigo: 'chofer', nombre: 'Chofer', activo: true },
+        { id: '00000000-0000-0000-0000-000000000113', codigo: 'supervisor', nombre: 'Supervisor', activo: true },
+        { id: '00000000-0000-0000-0000-000000000106', codigo: 'admin', nombre: 'Admin', activo: true },
+        { id: superAdminRoleId, codigo: 'super_admin', nombre: 'Super admin', activo: true }
+      ];
+      return this.result<Row>(text.includes("codigo <> 'super_admin'") ? roles.slice(0, -1) : roles);
+    }
+    if (text.includes('FROM public.usuarios u JOIN public.roles r') && values[0] === otherUserId) return this.result<Row>([{
+      id: otherUserId, usuario: 'otro-admin', nombre: 'Otra empresa', activo: true,
+      empresa_id: otherCompanyId, rol_id: '00000000-0000-0000-0000-000000000106', rol_codigo: 'admin'
+    }]);
+    if (text.includes('FROM public.usuarios u JOIN public.roles r')) return this.result<Row>([]);
     throw new Error(`Unexpected query in test: ${text}`);
   }
 
@@ -60,9 +79,56 @@ test('los roles globales y las vistas protegidas solo son administrables por sup
   const app = await buildApp({ database });
   const roles = await app.inject({ method: 'GET', url: '/api/roles', headers });
   assert.equal(roles.statusCode, 200);
+  assert.deepEqual(
+    roles.json().roles.map((role: { codigo: string }) => role.codigo),
+    ['user', 'local', 'chofer', 'supervisor', 'admin', 'super_admin']
+  );
   const protectedView = await app.inject({ method: 'PATCH', url: '/api/role-views', headers, payload: { role_code: 'admin', view_code: 'home', visible: false } });
   assert.equal(protectedView.statusCode, 400);
   await app.close();
+});
+
+test('un administrador consulta solo los roles que puede asignar', async () => {
+  const database = new FakeDatabase();
+  const app = await buildApp({ database });
+  const response = await app.inject({ method: 'GET', url: '/api/roles', headers });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(
+    response.json().roles.map((role: { codigo: string }) => role.codigo),
+    ['user', 'local', 'chofer', 'supervisor', 'admin']
+  );
+  await app.close();
+});
+
+test('un administrador no puede crear un super_admin ni modificar usuarios de otra empresa', async () => {
+  const database = new FakeDatabase();
+  const app = await buildApp({ database });
+  const create = await app.inject({
+    method: 'POST', url: '/api/users', headers,
+    payload: { nombre: 'Escalada', usuario: 'escalada', password: 'clave-segura', empresa_id: companyId, rol_id: superAdminRoleId }
+  });
+  assert.equal(create.statusCode, 403);
+
+  const update = await app.inject({
+    method: 'PATCH', url: `/api/users/${otherUserId}`, headers,
+    payload: { nombre: 'No permitido' }
+  });
+  assert.equal(update.statusCode, 403);
+  assert.equal(database.queries.some((entry) => entry.text.includes('UPDATE public.usuarios')), false);
+  await app.close();
+});
+
+test('supervisor conserva la lectura de usuarios y los roles operativos no acceden a su administración', async () => {
+  for (const roleCode of ['supervisor', 'user', 'chofer', 'local']) {
+    const database = new FakeDatabase();
+    database.roleCode = roleCode;
+    const app = await buildApp({ database });
+    const users = await app.inject({ method: 'GET', url: '/api/users', headers });
+    assert.equal(users.statusCode, roleCode === 'supervisor' ? 200 : 403);
+    const roles = await app.inject({ method: 'GET', url: '/api/roles', headers });
+    assert.equal(roles.statusCode, 403);
+    await app.close();
+  }
 });
 
 test('los payloads administrativos son estrictos y no admiten datos de actor', async () => {

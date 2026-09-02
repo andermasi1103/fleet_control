@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dashboard/app_shell.dart';
+import '../../authentication/providers/session_provider.dart';
 import '../data/dtos/user_dto.dart';
 import '../providers/users_provider.dart';
+import '../user_access_policy.dart';
 import 'user_reset_password_dialog.dart';
 import 'widgets/user_card.dart';
 
@@ -28,6 +30,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(usersProvider);
     final users = state.filteredUsers;
+    final roleCode = ref.watch(sessionProvider).session?.user.role;
+    final canManage = canManageUsers(roleCode);
+    final canManageLocations = canManageUserLocations(roleCode);
 
     return AppShell(
       title: 'Usuarios',
@@ -52,16 +57,19 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Administra los usuarios, empresas, roles y acceso al sistema.',
+                    Text(
+                      canManage
+                          ? 'Administra los usuarios, empresas, roles y acceso al sistema.'
+                          : 'Consulta usuarios y administra sus locales asignados.',
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  onPressed: state.isLoading ? null : _createUser,
-                  icon: const Icon(Icons.add),
-                  label: const Text('NUEVO USUARIO'),
-                ),
+                if (canManage)
+                  ElevatedButton.icon(
+                    onPressed: state.isLoading ? null : _createUser,
+                    icon: const Icon(Icons.add),
+                    label: const Text('NUEVO USUARIO'),
+                  ),
               ],
             ),
             const SizedBox(height: 20),
@@ -93,10 +101,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: UserCard(
                     user: user,
-                    onEdit: () => _editUser(user),
-                    onResetPassword: () =>
-                        showUserResetPasswordDialog(context, user),
-                    onAssignLocations: () => _assignLocations(user),
+                    onEdit: canManage ? () => _editUser(user) : null,
+                    onResetPassword: canManage
+                        ? () => showUserResetPasswordDialog(context, user)
+                        : null,
+                    onAssignLocations: canManageLocations
+                        ? () => _assignLocations(user)
+                        : null,
                   ),
                 ),
               ),

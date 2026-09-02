@@ -13,9 +13,9 @@ class UserCard extends StatelessWidget {
   });
 
   final UserDto user;
-  final VoidCallback onEdit;
-  final VoidCallback onResetPassword;
-  final VoidCallback onAssignLocations;
+  final VoidCallback? onEdit;
+  final VoidCallback? onResetPassword;
+  final VoidCallback? onAssignLocations;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -51,21 +51,24 @@ class UserCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              TextButton.icon(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('EDITAR'),
-              ),
-              TextButton.icon(
-                onPressed: onResetPassword,
-                icon: const Icon(Icons.lock_reset_outlined),
-                label: const Text('RESTABLECER CONTRASEÑA'),
-              ),
-              TextButton.icon(
-                onPressed: onAssignLocations,
-                icon: const Icon(Icons.location_on_outlined),
-                label: const Text('ASIGNAR LOCALES'),
-              ),
+              if (onEdit != null)
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('EDITAR'),
+                ),
+              if (onResetPassword != null)
+                TextButton.icon(
+                  onPressed: onResetPassword,
+                  icon: const Icon(Icons.lock_reset_outlined),
+                  label: const Text('RESTABLECER CONTRASEÑA'),
+                ),
+              if (onAssignLocations != null)
+                TextButton.icon(
+                  onPressed: onAssignLocations,
+                  icon: const Icon(Icons.location_on_outlined),
+                  label: const Text('ASIGNAR LOCALES'),
+                ),
             ],
           ),
         ],
