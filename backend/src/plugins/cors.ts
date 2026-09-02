@@ -14,6 +14,7 @@ export async function registerCors(app: FastifyInstance): Promise<void> {
 
       callback(null, corsOrigins.includes(origin));
     },
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH'],
     credentials: false
   });
 }

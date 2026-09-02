@@ -53,6 +53,45 @@ test('the configured local browser origin is allowed', async () => {
   }
 });
 
+test('CORS preflight permits PATCH for the configured local browser origin', async () => {
+  const app = await buildApp({ database: new SecurityDatabase() });
+  try {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/locations/00000000-0000-0000-0000-000000000001',
+      headers: {
+        origin: 'http://localhost:8080',
+        'access-control-request-method': 'PATCH'
+      }
+    });
+
+    assert.equal(response.statusCode, 204);
+    assert.equal(response.headers['access-control-allow-origin'], 'http://localhost:8080');
+    assert.match(response.headers['access-control-allow-methods'] ?? '', /\bPATCH\b/);
+  } finally {
+    await app.close();
+  }
+});
+
+test('CORS preflight does not allow an untrusted browser origin', async () => {
+  const app = await buildApp({ database: new SecurityDatabase() });
+  try {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/locations/00000000-0000-0000-0000-000000000001',
+      headers: {
+        origin: 'https://untrusted.example',
+        'access-control-request-method': 'PATCH'
+      }
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.headers['access-control-allow-origin'], undefined);
+  } finally {
+    await app.close();
+  }
+});
+
 test('login attempts are limited without revealing whether the user exists', async () => {
   const app = await buildApp({ database: new SecurityDatabase() });
   try {
@@ -60,9 +99,11 @@ test('login attempts are limited without revealing whether the user exists', asy
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
+        headers: { origin: 'http://localhost:8080' },
         payload: { usuario: 'unknown-user', password: 'incorrecta' }
       });
       assert.equal(response.statusCode, 401);
+      assert.equal(response.headers['access-control-allow-origin'], 'http://localhost:8080');
       assert.deepEqual(response.json(), {
         error: 'invalid_credentials',
         message: 'Usuario o contraseña incorrectos.'
