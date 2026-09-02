@@ -23,6 +23,10 @@ El rol de aplicación `fleet_app` recibe sólo los privilegios que exigen las
 rutas de Fastify. Las políticas RLS se aplican por separado desde
 `database/security/fleet_app_rls.sql` una vez que las tablas existen.
 
+`005_seed_initial_roles.sql` instala el catálogo base obligatorio de roles de
+aplicación. Usa `codigo` como clave natural y `ON CONFLICT DO NOTHING`, por lo
+que una ejecución no duplica ni modifica los roles existentes.
+
 ## Registro y transacciones
 
 `backend/scripts/migrate.ts` verifica el SHA-256 de cada archivo y registra su

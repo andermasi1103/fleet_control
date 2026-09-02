@@ -20,7 +20,7 @@
     "uat:presence": "pnpm run build && node dist/scripts/uat-presence.js",
     "security:apply-rls": "pnpm run build && node dist/scripts/uat-fixtures.js rls",
     "db:check-location": "tsx scripts/check-driver-location.ts",
-    "test": "tsx --test test/auth.test.ts test/bootstrap.test.ts test/tracking.test.ts test/administration.test.ts test/security.test.ts test/env.test.ts",
+    "test": "tsx --test test/auth.test.ts test/bootstrap.test.ts test/tracking.test.ts test/administration.test.ts test/security.test.ts test/env.test.ts test/migration-roles.test.ts",
     "test:security": "pnpm run build && node dist/scripts/check-security.js",
     "test:integration-admin": "tsx scripts/check-administration.ts",
     "test:management-queue": "tsx scripts/check-management-queue.ts",
