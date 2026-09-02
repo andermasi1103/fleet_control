@@ -27,6 +27,11 @@ rutas de Fastify. Las políticas RLS se aplican por separado desde
 aplicación. Usa `codigo` como clave natural y `ON CONFLICT DO NOTHING`, por lo
 que una ejecución no duplica ni modifica los roles existentes.
 
+`006_seed_app_views_and_role_views.sql` instala el catálogo obligatorio de 13
+vistas y sus 78 asociaciones base (cada una de las seis identidades de
+aplicación ve cada vista). Resuelve las relaciones por código, sin UUIDs
+locales, y preserva filas de catálogo o asociaciones ya existentes.
+
 ## Registro y transacciones
 
 `backend/scripts/migrate.ts` verifica el SHA-256 de cada archivo y registra su
