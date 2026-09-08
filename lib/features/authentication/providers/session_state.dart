@@ -3,6 +3,8 @@ import '../domain/entities/auth_session.dart';
 enum SessionStatus {
   initializing,
   authenticated,
+  biometricLocked,
+  passwordLogin,
   unauthenticated,
   failure,
 }
@@ -23,6 +25,18 @@ class SessionState {
           session: session,
         );
 
+  const SessionState.biometricLocked(AuthSession session)
+      : this._(
+          status: SessionStatus.biometricLocked,
+          session: session,
+        );
+
+  const SessionState.passwordLogin(AuthSession session)
+      : this._(
+          status: SessionStatus.passwordLogin,
+          session: session,
+        );
+
   const SessionState.unauthenticated({String? errorMessage})
       : this._(
           status: SessionStatus.unauthenticated,
@@ -40,6 +54,8 @@ class SessionState {
   final String? errorMessage;
 
   bool get isAuthenticated => status == SessionStatus.authenticated;
+
+  bool get isBiometricLocked => status == SessionStatus.biometricLocked;
 
   bool get isInitializing => status == SessionStatus.initializing;
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -14,6 +15,7 @@ import '../domain/tracking_position_policy.dart';
 import '../domain/tracking_profile.dart';
 import '../services/driver_force_gps_scheduler.dart';
 import '../services/driver_tracking_service.dart';
+import '../services/native_driver_tracking_service.dart';
 
 enum DriverTrackingStatus {
   idle,
@@ -22,6 +24,7 @@ enum DriverTrackingStatus {
   sending,
   permissionDenied,
   permissionDeniedForever,
+  notificationsBlocked,
   serviceDisabled,
   error,
 }
@@ -30,24 +33,28 @@ class DriverTrackingState {
   const DriverTrackingState({
     this.status = DriverTrackingStatus.idle,
     this.profile = TrackingProfile.idle,
+    this.isTrackingRequested = false,
     this.lastSentAt,
     this.message,
   });
 
   final DriverTrackingStatus status;
   final TrackingProfile profile;
+  final bool isTrackingRequested;
   final DateTime? lastSentAt;
   final String? message;
 }
 
-final driverLocationDataSourceProvider = Provider<DriverLocationDataSource>((
-  ref,
-) {
+final driverLocationDataSourceProvider = Provider<DriverLocationDataSource>((ref) {
   return DriverLocationDataSource(ref.watch(backendApiClientProvider));
 });
 
 final driverTrackingServiceProvider = Provider<DriverTrackingService>((ref) {
   return DriverTrackingService();
+});
+
+final nativeDriverTrackingGatewayProvider = Provider<NativeDriverTrackingGateway>((ref) {
+  return const MethodChannelNativeDriverTrackingGateway();
 });
 
 final driverTrackingProvider =
@@ -63,12 +70,15 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
   final _backpressure = LatestPositionBuffer();
   Position? _lastSentPosition;
   DateTime? _lastSentAt;
-  String? _trackedUserId;
   String? _sessionToken;
   TrackingProfile _profile = TrackingProfile.idle;
   bool _isInForeground = true;
   bool _isStarting = false;
+  bool _isTrackingRequested = false;
   int _generation = 0;
+
+  bool get _usesNativeAndroidService =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
   DriverTrackingState build() {
@@ -76,145 +86,236 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
       requestGps: _requestForcedPosition,
     );
     ref.listen(sessionProvider, (_, next) {
-      if (ref.read(postLoginBootstrapProvider)) {
-        unawaited(_synchronizeSession(next.session));
-      }
+      unawaited(_synchronizeSession(next.session));
     });
     ref.listen(postLoginBootstrapProvider, (_, isReady) {
       if (isReady) {
         unawaited(_synchronizeSession(ref.read(sessionProvider).session));
+        unawaited(_recoverNativeStatus());
       } else {
-        unawaited(_stop(setIdleState: true));
+        unawaited(_stop(setIdleState: true, clearTrackingRequest: true));
       }
     });
     if (ref.read(postLoginBootstrapProvider)) {
-      Future.microtask(
-        () => _synchronizeSession(ref.read(sessionProvider).session),
-      );
+      Future.microtask(() {
+        unawaited(_synchronizeSession(ref.read(sessionProvider).session));
+        unawaited(_recoverNativeStatus());
+      });
     }
     ref.onDispose(_dispose);
     return DriverTrackingState(profile: _profile);
   }
 
-  /// The future operational-state source will call this method.
+  /// Starts only after an explicit, visible action from the driver.
+  Future<void> startTracking() async {
+    final session = ref.read(sessionProvider).session;
+    if (!_isEligibleDriver(session)) {
+      _setState(
+        status: DriverTrackingStatus.error,
+        message: 'Inicia sesión como chofer para activar el seguimiento.',
+      );
+      return;
+    }
+    if (!_profile.isEnabled) _profile = TrackingProfile.available;
+    _setState(status: DriverTrackingStatus.starting);
+
+    final access = await ref
+        .read(driverTrackingServiceProvider)
+        .requestLocationAccess();
+    switch (access) {
+      case DriverLocationAccess.serviceDisabled:
+        _setState(
+          status: DriverTrackingStatus.serviceDisabled,
+          message: 'Activa la ubicación para iniciar el seguimiento.',
+        );
+        return;
+      case DriverLocationAccess.permissionDenied:
+        _setState(
+          status: DriverTrackingStatus.permissionDenied,
+          message: 'MasiTrack necesita permiso de ubicación para iniciar el seguimiento.',
+        );
+        return;
+      case DriverLocationAccess.permissionDeniedForever:
+        _setState(
+          status: DriverTrackingStatus.permissionDeniedForever,
+          message: 'El permiso de ubicación está bloqueado. Habilítalo desde la configuración del dispositivo.',
+        );
+        return;
+      case DriverLocationAccess.granted:
+        break;
+    }
+
+    _isTrackingRequested = true;
+    if (_usesNativeAndroidService) {
+      await _startNative(session!);
+    } else {
+      await _startDart(session!);
+    }
+  }
+
+  Future<void> stopTracking() =>
+      _stop(setIdleState: true, clearTrackingRequest: true);
+
+  /// Operational state changes only update an already explicit tracking session.
   Future<void> setProfile(TrackingProfile profile) async {
     if (_profile == profile) return;
-
     _profile = profile;
-    await _stop(setIdleState: true);
-    if (_profile.isEnabled &&
-        _isInForeground &&
-        ref.read(postLoginBootstrapProvider)) {
-      await _synchronizeSession(ref.read(sessionProvider).session);
+    if (!_profile.isEnabled) {
+      await _stop(setIdleState: true, clearTrackingRequest: true);
+      return;
     }
+    if (!_isTrackingRequested) {
+      _setState(status: DriverTrackingStatus.idle);
+      return;
+    }
+    if (_usesNativeAndroidService) {
+      try {
+        final nativeState = await ref
+            .read(nativeDriverTrackingGatewayProvider)
+            .updateProfile(NativeDriverTrackingProfileUpdate(_profile));
+        _applyNativeState(nativeState);
+      } catch (_) {
+        _setState(
+          status: DriverTrackingStatus.error,
+          message: 'No fue posible actualizar el perfil de seguimiento.',
+        );
+      }
+      return;
+    }
+    await _synchronizeSession(ref.read(sessionProvider).session);
   }
 
   Future<void> handleLifecycleChange(AppLifecycleState lifecycleState) async {
     if (lifecycleState == AppLifecycleState.resumed) {
       _isInForeground = true;
-      if (ref.read(postLoginBootstrapProvider)) {
-        await _synchronizeSession(ref.read(sessionProvider).session);
-      }
+      await _recoverNativeStatus();
+      await _synchronizeSession(ref.read(sessionProvider).session);
       return;
     }
-
-    // On Android, Geolocator owns a location foreground service with a
-    // persistent notification. The Flutter UI lifecycle must not stop that
-    // service while an eligible driver's tracking profile remains active.
-    if (defaultTargetPlatform == TargetPlatform.android &&
-        _profile.isEnabled &&
-        _sessionToken != null) {
-      return;
-    }
-
+    if (_usesNativeAndroidService) return;
     if (lifecycleState == AppLifecycleState.inactive ||
         lifecycleState == AppLifecycleState.paused ||
         lifecycleState == AppLifecycleState.detached) {
       _isInForeground = false;
-      await _stop(setIdleState: true);
+      await _stop(setIdleState: true, clearTrackingRequest: false);
     }
   }
 
   Future<void> _synchronizeSession(AuthSession? session) async {
-    if (!_profile.isEnabled ||
-        !_isInForeground ||
-        !_isEligibleDriver(session)) {
-      await _stop(setIdleState: true);
+    if (!_isEligibleDriver(session)) {
+      await _stop(setIdleState: true, clearTrackingRequest: true);
       return;
     }
-
-    if (_isStarting ||
-        (_trackedUserId == session!.user.id &&
-            _sessionToken == session.sessionToken &&
-            _positionSubscription != null)) {
+    if (!_isTrackingRequested) {
+      _setState(status: DriverTrackingStatus.idle);
       return;
     }
-
-    await _start(session);
+    if (_usesNativeAndroidService) return;
+    if (!_isInForeground || _isStarting || _positionSubscription != null) return;
+    await _startDart(session!);
   }
 
   bool _isEligibleDriver(AuthSession? session) {
-    return session != null &&
+    return ref.read(postLoginBootstrapProvider) &&
+        session != null &&
         !session.isExpired &&
         session.sessionToken.isNotEmpty &&
         session.user.role == 'chofer';
   }
 
-  Future<void> _start(AuthSession session) async {
-    await _stop(setIdleState: false);
+  Future<void> _startNative(AuthSession session) async {
+    try {
+      final nativeState = await ref.read(nativeDriverTrackingGatewayProvider).start(
+            NativeDriverTrackingStartRequest(
+              sessionToken: session.sessionToken,
+              backendApiBaseUrl: ref.read(appConfigProvider).backendApiBaseUrl,
+              profile: _profile,
+            ),
+          );
+      _applyNativeState(nativeState);
+      if (nativeState.status == NativeDriverTrackingStatus.starting) {
+        Future<void>.delayed(const Duration(milliseconds: 300), () {
+          unawaited(_recoverNativeStatus());
+        });
+      }
+    } on PlatformException catch (error) {
+      _isTrackingRequested = false;
+      if (error.code == 'notifications_blocked') {
+        _setState(
+          status: DriverTrackingStatus.notificationsBlocked,
+          message: 'Habilita las notificaciones para mostrar el seguimiento activo durante tu jornada.',
+        );
+      } else if (error.code == 'location_permission_denied') {
+        _setState(
+          status: DriverTrackingStatus.permissionDenied,
+          message: 'MasiTrack necesita permiso de ubicación para iniciar el seguimiento.',
+        );
+      } else {
+        _setState(
+          status: DriverTrackingStatus.error,
+          message: 'No fue posible iniciar el seguimiento.',
+        );
+      }
+    } catch (_) {
+      _isTrackingRequested = false;
+      _setState(
+        status: DriverTrackingStatus.error,
+        message: 'No fue posible iniciar el seguimiento.',
+      );
+    }
+  }
+
+  Future<void> _recoverNativeStatus() async {
+    if (!_usesNativeAndroidService ||
+        !_isEligibleDriver(ref.read(sessionProvider).session)) {
+      return;
+    }
+    try {
+      final nativeState = await ref
+          .read(nativeDriverTrackingGatewayProvider)
+          .getStatus();
+      if (nativeState.isActive) _isTrackingRequested = true;
+      if (nativeState.status != NativeDriverTrackingStatus.idle ||
+          _isTrackingRequested) {
+        _applyNativeState(nativeState);
+      }
+    } catch (_) {
+      // No platform channel exists in Dart unit tests or non-Android hosts.
+    }
+  }
+
+  void _applyNativeState(NativeDriverTrackingState nativeState) {
+    final status = switch (nativeState.status) {
+      NativeDriverTrackingStatus.starting => DriverTrackingStatus.starting,
+      NativeDriverTrackingStatus.active => DriverTrackingStatus.active,
+      NativeDriverTrackingStatus.error => DriverTrackingStatus.error,
+      NativeDriverTrackingStatus.idle => DriverTrackingStatus.idle,
+    };
+    if (nativeState.profile.isEnabled) _profile = nativeState.profile;
+    _setState(status: status, message: nativeState.message);
+  }
+
+  Future<void> _startDart(AuthSession session) async {
+    if (_isStarting || _positionSubscription != null) return;
     _isStarting = true;
     final generation = ++_generation;
-    _trackedUserId = session.user.id;
     _sessionToken = session.sessionToken;
-    state = DriverTrackingState(
-      status: DriverTrackingStatus.starting,
-      profile: _profile,
-    );
-
+    _setState(status: DriverTrackingStatus.starting);
     try {
-      final access = await ref
-          .read(driverTrackingServiceProvider)
-          .requestLocationAccess();
-      if (!_isCurrentSession(generation, session)) return;
-
-      switch (access) {
-        case DriverLocationAccess.serviceDisabled:
-          _setAccessState(
-            DriverTrackingStatus.serviceDisabled,
-            'Activa la ubicación para aparecer disponible en MasiTrack. Aparecerás como sin conexión para el supervisor.',
-          );
-          return;
-        case DriverLocationAccess.permissionDenied:
-          _setAccessState(
-            DriverTrackingStatus.permissionDenied,
-            'MasiTrack necesita permiso de ubicación para informar tu disponibilidad.',
-          );
-          return;
-        case DriverLocationAccess.permissionDeniedForever:
-          _setAccessState(
-            DriverTrackingStatus.permissionDeniedForever,
-            'El permiso de ubicación está bloqueado. Habilítalo desde la configuración del dispositivo.',
-          );
-          return;
-        case DriverLocationAccess.granted:
-          break;
-      }
-
       final initialPosition = await ref
           .read(driverTrackingServiceProvider)
           .getCurrentPosition(_profile);
-      if (!_isCurrentSession(generation, session)) return;
-
+      if (!_isCurrentDartSession(generation, session)) return;
       await _sendOrBuffer(initialPosition, force: true);
-      if (!_isCurrentSession(generation, session)) return;
-
+      if (!_isCurrentDartSession(generation, session)) return;
       _positionSubscription = ref
           .read(driverTrackingServiceProvider)
           .getPositionStream(_profile)
           .listen(
             (position) => unawaited(_sendOrBuffer(position)),
-            onError: (_) => _setTemporaryError(
-              'Ubicación desactivada. Aparecerás como sin conexión para el supervisor.',
+            onError: (_) => _setState(
+              status: DriverTrackingStatus.error,
+              message: 'Ubicación desactivada. El seguimiento se reanudará al corregirlo.',
             ),
           );
       _forceGpsScheduler.configure(
@@ -222,18 +323,19 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
         isInForeground: _isInForeground,
       );
     } on LocationServiceDisabledException {
-      _setAccessState(
-        DriverTrackingStatus.serviceDisabled,
-        'Activa la ubicación para aparecer disponible en MasiTrack. Aparecerás como sin conexión para el supervisor.',
+      _setState(
+        status: DriverTrackingStatus.serviceDisabled,
+        message: 'Activa la ubicación para iniciar el seguimiento.',
       );
     } on PermissionDeniedException {
-      _setAccessState(
-        DriverTrackingStatus.permissionDenied,
-        'MasiTrack necesita permiso de ubicación para informar tu disponibilidad.',
+      _setState(
+        status: DriverTrackingStatus.permissionDenied,
+        message: 'MasiTrack necesita permiso de ubicación.',
       );
     } catch (_) {
-      _setTemporaryError(
-        'Ubicación desactivada. Aparecerás como sin conexión para el supervisor.',
+      _setState(
+        status: DriverTrackingStatus.error,
+        message: 'No fue posible iniciar el seguimiento.',
       );
     } finally {
       _isStarting = false;
@@ -242,33 +344,24 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
 
   Future<void> _requestForcedPosition(DateTime dueAt) async {
     final generation = _generation;
-    final profile = _profile;
-    if (!profile.isEnabled || !_isInForeground || _sessionToken == null) return;
-
+    if (!_profile.isEnabled || !_isInForeground || _sessionToken == null) return;
     try {
       final position = await ref
           .read(driverTrackingServiceProvider)
-          .getCurrentPosition(profile);
-      if (generation != _generation ||
-          !_isInForeground ||
-          _sessionToken == null ||
-          !_lastSentBefore(dueAt)) {
-        return;
+          .getCurrentPosition(_profile);
+      if (generation == _generation && _lastSentBefore(dueAt)) {
+        await _sendOrBuffer(position, force: true);
       }
-      await _sendOrBuffer(position, force: true);
-    } on LocationServiceDisabledException {
-      _setTemporaryError('Ubicación desactivada.');
-    } on PermissionDeniedException {
-      _setTemporaryError('MasiTrack necesita permiso de ubicación.');
     } catch (_) {
-      _setTemporaryError('No fue posible obtener una ubicación GPS actual.');
+      _setState(
+        status: DriverTrackingStatus.error,
+        message: 'No fue posible obtener una ubicación GPS actual.',
+      );
     }
   }
 
-  bool _lastSentBefore(DateTime dueAt) {
-    final lastSentAt = _lastSentAt;
-    return lastSentAt == null || lastSentAt.isBefore(dueAt);
-  }
+  bool _lastSentBefore(DateTime dueAt) =>
+      _lastSentAt == null || _lastSentAt!.isBefore(dueAt);
 
   Future<void> _sendOrBuffer(Position position, {bool force = false}) async {
     final validation = _positionPolicy.validate(
@@ -276,13 +369,12 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
       profile: _profile,
       now: DateTime.now(),
     );
-    if (validation != null) {
+    if (validation != null ||
+        !_backpressure.startOrBuffer(position, force: force)) {
       _logRejectedPosition(validation);
       return;
     }
-    if (!_backpressure.startOrBuffer(position, force: force)) return;
     final generation = _generation;
-
     try {
       await _sendPosition(position, force: force, generation: generation);
     } finally {
@@ -308,84 +400,70 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
       lastSentAt: _lastSentAt,
       force: force,
     );
-    if (_sessionToken == null || rejection != null) {
+    final token = _sessionToken;
+    if (token == null || rejection != null) {
       _logRejectedPosition(rejection);
       return;
     }
-
-    state = DriverTrackingState(
-      status: DriverTrackingStatus.sending,
-      profile: _profile,
-      lastSentAt: _lastSentAt,
-    );
-
-    final sessionToken = _sessionToken;
+    _setState(status: DriverTrackingStatus.sending);
     try {
       await ref
           .read(driverLocationDataSourceProvider)
-          .updateLocation(sessionToken: sessionToken!, position: position);
-      if (_sessionToken != sessionToken || generation != _generation) return;
-
+          .updateLocation(sessionToken: token, position: position);
+      if (_sessionToken != token || generation != _generation) return;
       _lastSentPosition = position;
       _lastSentAt = DateTime.now();
       _forceGpsScheduler.noteLocationSent();
-      state = DriverTrackingState(
-        status: DriverTrackingStatus.active,
-        profile: _profile,
-        lastSentAt: _lastSentAt,
-      );
-      if (kDebugMode) debugPrint('driver-location sent');
+      _setState(status: DriverTrackingStatus.active, lastSentAt: _lastSentAt);
+      if (kDebugMode) debugPrint('tracking: location sent');
     } on Failure catch (error) {
       if (error.statusCode == 401 || error.statusCode == 403) {
-        await _stop(setIdleState: false);
-        state = DriverTrackingState(
+        await _stop(setIdleState: false, clearTrackingRequest: true);
+        _setState(status: DriverTrackingStatus.error, message: error.message);
+      } else {
+        _setState(
           status: DriverTrackingStatus.error,
-          profile: _profile,
-          lastSentAt: _lastSentAt,
-          message: error.message,
+          message: 'Error temporal al actualizar la ubicación.',
         );
-        return;
       }
-
-      _setTemporaryError('Error temporal al actualizar la ubicación.');
     } catch (_) {
-      _setTemporaryError('Error temporal al actualizar la ubicación.');
+      _setState(
+        status: DriverTrackingStatus.error,
+        message: 'Error temporal al actualizar la ubicación.',
+      );
     }
   }
 
-  bool _isCurrentSession(int generation, AuthSession session) {
-    return _profile.isEnabled &&
-        _isInForeground &&
-        generation == _generation &&
-        _trackedUserId == session.user.id &&
-        _sessionToken == session.sessionToken;
-  }
+  bool _isCurrentDartSession(int generation, AuthSession session) =>
+      _isTrackingRequested &&
+      _isInForeground &&
+      generation == _generation &&
+      _sessionToken == session.sessionToken;
 
   void _logRejectedPosition(PositionRejectionReason? reason) {
     if (kDebugMode && reason != null) {
-      debugPrint('driver-location ignored: ${reason.name}');
+      debugPrint('tracking: location ignored=${reason.name}');
     }
   }
 
-  void _setAccessState(DriverTrackingStatus status, String message) {
+  void _setState({
+    required DriverTrackingStatus status,
+    DateTime? lastSentAt,
+    String? message,
+  }) {
     state = DriverTrackingState(
       status: status,
       profile: _profile,
-      lastSentAt: _lastSentAt,
+      isTrackingRequested: _isTrackingRequested,
+      lastSentAt: lastSentAt ?? _lastSentAt,
       message: message,
     );
   }
 
-  void _setTemporaryError(String message) {
-    state = DriverTrackingState(
-      status: DriverTrackingStatus.error,
-      profile: _profile,
-      lastSentAt: _lastSentAt,
-      message: message,
-    );
-  }
-
-  Future<void> _stop({required bool setIdleState}) async {
+  Future<void> _stop({
+    required bool setIdleState,
+    required bool clearTrackingRequest,
+  }) async {
     ++_generation;
     _isStarting = false;
     final subscription = _positionSubscription;
@@ -393,16 +471,22 @@ class DriverTrackingNotifier extends Notifier<DriverTrackingState> {
     await subscription?.cancel();
     _forceGpsScheduler.stop();
     _backpressure.reset();
+    if (_usesNativeAndroidService) {
+      try {
+        await ref.read(nativeDriverTrackingGatewayProvider).stop();
+      } catch (_) {
+        // Local logout must not depend on a platform callback.
+      }
+    }
     _lastSentPosition = null;
     _lastSentAt = null;
-    _trackedUserId = null;
     _sessionToken = null;
-    if (setIdleState) state = DriverTrackingState(profile: _profile);
+    if (clearTrackingRequest) _isTrackingRequested = false;
+    if (setIdleState) _setState(status: DriverTrackingStatus.idle);
   }
 
   void _dispose() {
     _positionSubscription?.cancel();
-    _positionSubscription = null;
     _forceGpsScheduler.dispose();
     _backpressure.reset();
   }

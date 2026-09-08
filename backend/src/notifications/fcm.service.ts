@@ -7,8 +7,8 @@ type Row = Record<string, unknown>;
 export type FirebaseServiceAccount = { client_email: string; private_key: string; project_id: string; token_uri?: string };
 type NewOrder = { id: string; empresa_id: string; local_id: string };
 type Device = { id: string; token: string };
-type PushMessage = { title: string; body: string; data: { type: string; order_id: string; route: string } };
-export type FcmTransport = (device: Device, message: PushMessage, account: FirebaseServiceAccount) => Promise<{ invalidToken: boolean }>;
+type PushMessage = { title: string; body: string; data: { type: string; order_id: string; route: string }; androidChannelId: 'masitrack_orders' };
+export type FcmTransport = (device: Device, message: PushMessage, account: FirebaseServiceAccount) => Promise<{ accepted: boolean; invalidToken: boolean; firebaseStatus?: number }>;
 let cachedAccessToken: { accountId: string; value: string; expiresAt: number } | null = null;
 
 function accountFromEnv(): FirebaseServiceAccount | null {
@@ -71,24 +71,24 @@ const httpV1Transport: FcmTransport = async (device, message, account) => {
     response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=UTF-8' },
-      body: JSON.stringify({ message: { token: device.token, notification: { title: message.title, body: message.body }, data: message.data, android: { priority: 'high' }, webpush: { headers: { Urgency: 'high' }, fcm_options: { link: '/driver-orders' } } } }),
+      body: JSON.stringify({ message: { token: device.token, notification: { title: message.title, body: message.body }, data: message.data, android: { priority: 'high', notification: { channel_id: message.androidChannelId } }, webpush: { headers: { Urgency: 'high' }, fcm_options: { link: '/driver-orders' } } } }),
       signal: controller.signal
     });
   } finally {
     clearTimeout(timeout);
   }
-  if (response.ok) return { invalidToken: false };
-  return { invalidToken: invalidRegistration(response.status, await response.json().catch(() => null)) };
+  console.info('push: firebase status=%d', response.status);
+  if (response.ok) return { accepted: true, invalidToken: false, firebaseStatus: response.status };
+  return { accepted: false, invalidToken: invalidRegistration(response.status, await response.json().catch(() => null)), firebaseStatus: response.status };
 };
 
 export async function notifyNewOrder(database: Database, order: NewOrder, options: { transport?: FcmTransport; account?: FirebaseServiceAccount | null } = {}): Promise<void> {
   try {
     const drivers = await database.query<Row>(`SELECT u.id FROM public.usuario_locales ul JOIN public.usuarios u ON u.id=ul.usuario_id JOIN public.roles r ON r.id=u.rol_id JOIN public.locales l ON l.id=ul.local_id WHERE ul.local_id=$1::uuid AND u.empresa_id=$2::uuid AND l.empresa_id=$2::uuid AND u.activo=true AND r.codigo='chofer'`, [order.local_id, order.empresa_id]);
     const driverIds = drivers.rows.map((row) => typeof row.id === 'string' ? row.id : '').filter(Boolean);
+    console.info('push: eligibleRecipients=%d', driverIds.length);
     if (!driverIds.length) return;
-    const local = await database.query<Row>('SELECT nombre FROM public.locales WHERE id=$1::uuid', [order.local_id]);
-    const localName = typeof local.rows[0]?.nombre === 'string' && local.rows[0].nombre.trim() ? local.rows[0].nombre.trim() : null;
-    const title = 'Nuevo pedido disponible'; const body = localName ? `${localName} lanzó un nuevo pedido.` : 'Hay un nuevo pedido disponible.';
+    const title = 'MasiTrack'; const body = 'Nuevo pedido disponible';
     const created = await database.query<Row>(
       `INSERT INTO public.notificaciones (usuario_id,tipo,titulo,mensaje,entity_type,entity_id,ruta)
        SELECT recipient_id,'new_order',$2::text,$3::text,'pedido',$4::uuid,'/driver-orders'
@@ -102,13 +102,29 @@ export async function notifyNewOrder(database: Database, order: NewOrder, option
     const devices = await database.query<Row>('SELECT id,token FROM public.notification_devices WHERE usuario_id=ANY($1::uuid[]) AND activo=true', [createdUserIds]);
     const activeDevices: Device[] = devices.rows.flatMap((row) => typeof row.id === 'string' && typeof row.token === 'string' && row.token ? [{ id: row.id, token: row.token }] : []);
     const account = options.account === undefined ? accountFromEnv() : options.account;
-    if (!account || !activeDevices.length) return;
+    console.info('push: configured=%s activeDevices=%d', account !== null, activeDevices.length);
+    if (!account || !activeDevices.length) {
+      console.info('push: attempted=0 accepted=0 rejected=0');
+      return;
+    }
     const transport = options.transport ?? httpV1Transport;
     const invalidIds: string[] = [];
-    await Promise.all(activeDevices.map(async (device) => { try { if ((await transport(device, { title, body, data: { type: 'new_order', order_id: order.id, route: '/driver-orders' } }, account)).invalidToken) invalidIds.push(device.id); } catch { /* Delivery is best-effort. */ } }));
+    let accepted = 0;
+    let rejected = 0;
+    await Promise.all(activeDevices.map(async (device) => {
+      try {
+        const result = await transport(device, { title, body, data: { type: 'new_order', order_id: order.id, route: '/driver-orders' }, androidChannelId: 'masitrack_orders' }, account);
+        if (result.accepted) accepted += 1;
+        else rejected += 1;
+        if (result.invalidToken) invalidIds.push(device.id);
+      } catch {
+        rejected += 1;
+      }
+    }));
+    console.info('push: attempted=%d accepted=%d rejected=%d', activeDevices.length, accepted, rejected);
     if (invalidIds.length) await database.query('UPDATE public.notification_devices SET activo=false,updated_at=now() WHERE id=ANY($1::uuid[])', [invalidIds]);
   } catch (error) {
     // The order and its transaction must never fail because notification delivery fails.
-    console.error('new_order_notification_failed', { orderId: order.id, error: error instanceof Error ? error.message : 'unknown' });
+    console.error('push: new order delivery failed', { errorType: error instanceof Error ? error.name : 'unknown' });
   }
 }

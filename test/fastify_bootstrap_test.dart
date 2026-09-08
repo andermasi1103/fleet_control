@@ -329,6 +329,12 @@ class _MemorySessionStorage implements SessionStorage {
   Future<void> write(AuthSession value) async {
     session = value;
   }
+
+  @override
+  Future<bool> readBiometricUnlockEnabled() async => false;
+
+  @override
+  Future<void> writeBiometricUnlockEnabled(bool enabled) async {}
 }
 
 class _RecordingAdapter implements HttpClientAdapter {

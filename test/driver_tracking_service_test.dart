@@ -7,7 +7,7 @@ import 'package:geolocator/geolocator.dart';
 void main() {
   tearDown(() => debugDefaultTargetPlatformOverride = null);
 
-  test('Android tracking uses a persistent location foreground service', () {
+  test('Android fallback keeps the available tracking profile', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     final settings = DriverTrackingService().locationSettingsFor(
       TrackingProfile.available,
@@ -16,12 +16,9 @@ void main() {
     expect(settings.accuracy, LocationAccuracy.medium);
     expect(settings.distanceFilter, 75);
     expect(settings.intervalDuration, const Duration(seconds: 45));
-    expect(
-      settings.foregroundNotificationConfig?.notificationTitle,
-      'MasiTrack',
-    );
-    expect(settings.foregroundNotificationConfig?.setOngoing, isTrue);
-    expect(settings.foregroundNotificationConfig?.enableWakeLock, isFalse);
+    // Android background ownership belongs exclusively to DriverTrackingService
+    // (Kotlin), never to Geolocator's Activity-bound foreground wrapper.
+    expect(settings.foregroundNotificationConfig, isNull);
   });
 
   test('Android active trips keep high-accuracy tracking settings', () {
@@ -33,6 +30,6 @@ void main() {
     expect(settings.accuracy, LocationAccuracy.high);
     expect(settings.distanceFilter, 20);
     expect(settings.intervalDuration, const Duration(seconds: 12));
-    expect(settings.foregroundNotificationConfig?.setOngoing, isTrue);
+    expect(settings.foregroundNotificationConfig, isNull);
   });
 }

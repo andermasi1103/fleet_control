@@ -9,6 +9,7 @@ import '../../../core/providers/core_providers.dart';
 import '../../dashboard/app_shell.dart';
 import '../../role_views/app_view_code.dart';
 import '../../role_views/providers/current_user_views_provider.dart';
+import '../../authentication/providers/biometric_unlock_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -46,6 +47,10 @@ class SettingsScreen extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/profile/change-password'),
                 ),
+                if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
+                  const SizedBox(height: 12),
+                  const _BiometricUnlockSetting(),
+                ],
                 if (userViews.canView(AppViewCode.roleViewsManagement)) ...[
                   const SizedBox(height: 12),
                   _SettingsItem(
@@ -96,6 +101,36 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BiometricUnlockSetting extends ConsumerWidget {
+  const _BiometricUnlockSetting();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final biometric = ref.watch(biometricUnlockProvider);
+    return Card(
+      child: SwitchListTile(
+        secondary: const Icon(Icons.fingerprint),
+        title: const Text('Ingreso con huella'),
+        subtitle: Text(
+          biometric.fingerprintAvailable
+              ? 'Desbloquea la aplicación con tu huella.'
+              : 'No hay una huella disponible en este dispositivo.',
+        ),
+        value: biometric.isEnabled,
+        onChanged: !biometric.fingerprintAvailable
+            ? null
+            : (enabled) async {
+                if (enabled) {
+                  await ref.read(biometricUnlockProvider.notifier).enable();
+                } else {
+                  await ref.read(biometricUnlockProvider.notifier).disable();
+                }
+              },
       ),
     );
   }

@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -42,4 +43,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Used directly by the dedicated Android foreground location service.
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("androidx.core:core:1.16.0")
 }

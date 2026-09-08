@@ -11,6 +11,10 @@ abstract interface class SessionStorage {
   Future<void> write(AuthSession session);
 
   Future<void> clear();
+
+  Future<bool> readBiometricUnlockEnabled();
+
+  Future<void> writeBiometricUnlockEnabled(bool enabled);
 }
 
 /// Persiste exclusivamente la sesión ya autenticada en almacenamiento cifrado.
@@ -20,6 +24,7 @@ class SecureSessionStorage implements SessionStorage {
     : _storage = storage ?? const FlutterSecureStorage();
 
   static const _sessionKey = 'fleet_control.auth_session.v1';
+  static const _biometricUnlockKey = 'fleet_control.biometric_unlock_enabled.v1';
 
   final FlutterSecureStorage _storage;
 
@@ -46,6 +51,16 @@ class SecureSessionStorage implements SessionStorage {
 
   @override
   Future<void> clear() => _storage.delete(key: _sessionKey);
+
+  @override
+  Future<bool> readBiometricUnlockEnabled() async =>
+      (await _storage.read(key: _biometricUnlockKey)) == 'true';
+
+  @override
+  Future<void> writeBiometricUnlockEnabled(bool enabled) => _storage.write(
+    key: _biometricUnlockKey,
+    value: enabled ? 'true' : 'false',
+  );
 
   static Map<String, dynamic> _sessionToJson(AuthSession session) => {
     'sessionToken': session.sessionToken,

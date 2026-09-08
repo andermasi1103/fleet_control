@@ -95,6 +95,12 @@ class _MemorySessionStorage implements SessionStorage {
 
   @override
   Future<void> write(AuthSession session) async {}
+
+  @override
+  Future<bool> readBiometricUnlockEnabled() async => false;
+
+  @override
+  Future<void> writeBiometricUnlockEnabled(bool enabled) async {}
 }
 
 class _FakeRoleViewsGateway implements RoleViewsGateway {

@@ -22,15 +22,16 @@ class FakeDatabase implements Database {
 
 const account: FirebaseServiceAccount = { client_email: 'test@example.test', private_key: 'unused', project_id: 'test-project' };
 const database = new FakeDatabase();
-const messages: { token: string; title: string; body: string; data: Record<string, string> }[] = [];
+const messages: { deviceId: string; title: string; body: string; data: Record<string, string>; androidChannelId: string }[] = [];
 await notifyNewOrder(database, { id: '00000000-0000-0000-0000-000000000099', empresa_id: '00000000-0000-0000-0000-000000000100', local_id: '00000000-0000-0000-0000-000000000101' }, {
   account,
-  transport: async (device, message) => { messages.push({ token: device.token, title: message.title, body: message.body, data: message.data }); return { invalidToken: device.token === 'invalid' }; }
+  transport: async (device, message) => { messages.push({ deviceId: device.id, title: message.title, body: message.body, data: message.data, androidChannelId: message.androidChannelId }); return { accepted: device.token !== 'invalid', invalidToken: device.token === 'invalid' }; }
 });
 assert.equal(messages.length, 2, 'One logical notification must reach every active device.');
-assert.equal(messages[0]?.title, 'Nuevo pedido disponible');
-assert.equal(messages[0]?.body, 'Local Central lanzó un nuevo pedido.');
+assert.equal(messages[0]?.title, 'MasiTrack');
+assert.equal(messages[0]?.body, 'Nuevo pedido disponible');
 assert.deepEqual(messages[0]?.data, { type: 'new_order', order_id: '00000000-0000-0000-0000-000000000099', route: '/driver-orders' });
+assert.equal(messages[0]?.androidChannelId, 'masitrack_orders');
 assert.deepEqual(database.recipientParameters, ['00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000100']);
 assert.deepEqual(database.invalidated, ['00000000-0000-0000-0000-000000000012']);
 database.created = false;

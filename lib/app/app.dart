@@ -11,6 +11,7 @@ import '../features/tracking/providers/driver_presence_provider.dart';
 import '../features/driver_orders/providers/driver_orders_provider.dart';
 import '../features/notifications/providers/notifications_provider.dart';
 import '../features/authentication/providers/session_provider.dart';
+import '../features/authentication/providers/biometric_unlock_provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class FleetControlApp extends ConsumerStatefulWidget {
@@ -37,6 +38,41 @@ class _FleetControlAppState extends ConsumerState<FleetControlApp>
             onNotificationOpened: _handleNotificationOpened,
           ),
     );
+    ref.listen<BiometricUnlockState>(biometricUnlockProvider, (_, next) {
+      if (next.offerActivation) _showBiometricActivationOffer();
+    });
+  }
+
+  Future<void> _showBiometricActivationOffer() async {
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    final dialogContext = appNavigatorKey.currentContext;
+    if (dialogContext == null || !dialogContext.mounted) return;
+    await showDialog<void>(
+      context: dialogContext,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Activar ingreso con huella?'),
+        content: const Text('Podrás desbloquear MasiTrack sin guardar tu contraseña.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(biometricUnlockProvider.notifier).dismissOffer();
+              Navigator.pop(context);
+            },
+            child: const Text('Ahora no'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final enabled = await ref.read(biometricUnlockProvider.notifier).enable();
+              if (!context.mounted) return;
+              if (enabled) Navigator.pop(context);
+            },
+            child: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+    ref.read(biometricUnlockProvider.notifier).dismissOffer();
   }
 
   @override

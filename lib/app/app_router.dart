@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/authentication/providers/session_provider.dart';
 import '../features/authentication/widgets/login_card.dart';
+import '../features/authentication/presentation/biometric_lock_screen.dart';
 import '../features/attendance/presentation/attendance_history_screen.dart';
 import '../features/attendance/presentation/attendance_screen.dart';
 import '../features/attendance/data/dtos/location_dto.dart';
@@ -39,11 +40,14 @@ import '../features/managements/presentation/assign_management_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../shared/widgets/app_loading.dart';
 
+final appNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   final session = ref.watch(sessionProvider);
   final currentUserViews = ref.watch(currentUserViewsProvider);
 
   return GoRouter(
+    navigatorKey: appNavigatorKey,
     initialLocation: '/splash',
     routes: [
       GoRoute(
@@ -59,6 +63,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             body: SafeArea(child: Center(child: LoginCard())),
           );
         },
+      ),
+      GoRoute(
+        path: '/unlock',
+        builder: (context, state) => const BiometricLockScreen(),
       ),
       GoRoute(
         path: '/home',
@@ -218,9 +226,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final path = state.uri.path;
       final isSplash = path == '/splash';
       final isLogin = path == '/login';
+      final isUnlock = path == '/unlock';
 
       if (session.isInitializing) {
         return isSplash ? null : '/splash';
+      }
+
+      if (session.isBiometricLocked) {
+        return isUnlock ? null : '/unlock';
       }
 
       if (!session.isAuthenticated) {
@@ -231,7 +244,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return isSplash ? null : '/splash';
       }
 
-      if (isSplash || isLogin) {
+      if (isSplash || isLogin || isUnlock) {
         return '/home';
       }
 

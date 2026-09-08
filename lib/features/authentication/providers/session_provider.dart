@@ -9,6 +9,7 @@ import '../../role_views/providers/current_user_views_provider.dart';
 import '../data/session_storage.dart';
 import '../data/datasources/fastify_auth_data_source.dart';
 import '../../notifications/providers/notifications_provider.dart';
+import 'biometric_unlock_provider.dart';
 import '../domain/entities/auth_session.dart';
 import '../domain/entities/authenticated_user.dart';
 import 'session_state.dart';
@@ -65,6 +66,7 @@ class SessionNotifier extends Notifier<SessionState> {
 
       await ref.read(sessionStorageProvider).write(session);
       await _activateAuthenticatedSession(session);
+      await ref.read(biometricUnlockProvider.notifier).prepareActivationOffer();
     } on Failure catch (error) {
       ref.read(postLoginBootstrapProvider.notifier).state = false;
       state = SessionState.unauthenticated(errorMessage: error.message);
@@ -143,6 +145,22 @@ class SessionNotifier extends Notifier<SessionState> {
     _setUnauthenticated();
   }
 
+  void unlockWithBiometrics() {
+    final session = state.session;
+    if (state.isBiometricLocked && session != null) {
+      state = SessionState.authenticated(session);
+    }
+  }
+
+  /// Shows the password login without revoking the already validated session.
+  /// This preserves Android-owned tracking while the Flutter UI is locked.
+  void useUsuarioAndPassword() {
+    final session = state.session;
+    if (state.isBiometricLocked && session != null) {
+      state = SessionState.passwordLogin(session);
+    }
+  }
+
   Future<void> _restoreSession() async {
     try {
       final session = await ref.read(sessionStorageProvider).read();
@@ -159,7 +177,10 @@ class SessionNotifier extends Notifier<SessionState> {
       await ref
           .read(fastifyAuthDataSourceProvider)
           .validateSession(sessionToken: session.sessionToken);
-      await _activateAuthenticatedSession(session);
+      final shouldLock = await ref
+          .read(biometricUnlockProvider.notifier)
+          .shouldLockRestoredSession();
+      await _activateAuthenticatedSession(session, biometricLocked: shouldLock);
     } on Failure catch (error) {
       if (error.type == FailureType.sessionExpired) {
         await _clearStoredSession();
@@ -177,8 +198,13 @@ class SessionNotifier extends Notifier<SessionState> {
     }
   }
 
-  Future<void> _activateAuthenticatedSession(AuthSession session) async {
-    state = SessionState.authenticated(session);
+  Future<void> _activateAuthenticatedSession(
+    AuthSession session, {
+    bool biometricLocked = false,
+  }) async {
+    state = biometricLocked
+        ? SessionState.biometricLocked(session)
+        : SessionState.authenticated(session);
     await _runBootstrapTask(
       () => ref.read(currentUserViewsProvider.notifier).refresh(),
     );

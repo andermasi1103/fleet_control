@@ -91,6 +91,9 @@ class DriverOrdersDatabase implements Database {
 
 class NotificationDatabase implements Database {
   recipientQuery: { text: string; values: unknown[] } | null = null;
+  deactivatedDeviceIds: string[] = [];
+
+  constructor(readonly activeDevices: { id: string; token: string }[] = []) {}
 
   async query<Row extends QueryResultRow = QueryResultRow>(
     text: string,
@@ -100,9 +103,12 @@ class NotificationDatabase implements Database {
       this.recipientQuery = { text, values };
       return this.result<Row>([{ id: drivers.c1 }, { id: drivers.c3 }]);
     }
-    if (text.includes('SELECT nombre FROM public.locales')) return this.result<Row>([{ nombre: 'A1' }]);
     if (text.includes('INSERT INTO public.notificaciones')) return this.result<Row>([{ usuario_id: drivers.c1 }, { usuario_id: drivers.c3 }]);
-    if (text.includes('FROM public.notification_devices')) return this.result<Row>([]);
+    if (text.includes('FROM public.notification_devices')) return this.result<Row>(this.activeDevices);
+    if (text.includes('UPDATE public.notification_devices SET activo=false')) {
+      this.deactivatedDeviceIds = values[0] as string[];
+      return this.result<Row>([]);
+    }
     throw new Error(`Unexpected query in test: ${text}`);
   }
 
@@ -181,6 +187,48 @@ test('las notificaciones de nuevo pedido se dirigen sólo a choferes asignados a
 
   assert.match(database.recipientQuery?.text ?? '', /FROM public\.usuario_locales/);
   assert.deepEqual(database.recipientQuery?.values, [localA1, companyA]);
+});
+
+test('push de pedido usa contenido seguro, data de navegación y desactiva tokens inválidos', async () => {
+  const database = new NotificationDatabase([
+    { id: 'device-1', token: 'token-no-debe-aparecer-en-logs' },
+    { id: 'device-2', token: 'token-invalido' }
+  ]);
+  const messages: { deviceId: string; title: string; body: string; data: Record<string, string>; androidChannelId: string }[] = [];
+
+  await notifyNewOrder(
+    database,
+    { id: orderA1, empresa_id: companyA, local_id: localA1 },
+    {
+      account: {
+        client_email: 'firebase@example.test',
+        private_key: 'not-a-real-key',
+        project_id: 'masitrack-test'
+      },
+      transport: async (device, message) => {
+        messages.push({ deviceId: device.id, ...message });
+        return { accepted: device.id === 'device-1', invalidToken: device.id === 'device-2' };
+      }
+    }
+  );
+
+  assert.deepEqual(messages, [
+    {
+      deviceId: 'device-1',
+      title: 'MasiTrack',
+      body: 'Nuevo pedido disponible',
+      data: { type: 'new_order', order_id: orderA1, route: '/driver-orders' },
+      androidChannelId: 'masitrack_orders'
+    },
+    {
+      deviceId: 'device-2',
+      title: 'MasiTrack',
+      body: 'Nuevo pedido disponible',
+      data: { type: 'new_order', order_id: orderA1, route: '/driver-orders' },
+      androidChannelId: 'masitrack_orders'
+    }
+  ]);
+  assert.deepEqual(database.deactivatedDeviceIds, ['device-2']);
 });
 
 test('007 protege el claim con usuario_locales y conserva la asignación idempotente', async () => {

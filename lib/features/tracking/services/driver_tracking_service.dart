@@ -21,14 +21,6 @@ class DriverTrackingService {
       permission = await Geolocator.requestPermission();
     }
 
-    // Android presents the background-location grant separately after the
-    // foreground grant. It is required for the driver's location foreground
-    // service to keep receiving updates after the UI is backgrounded.
-    if (defaultTargetPlatform == TargetPlatform.android &&
-        permission == LocationPermission.whileInUse) {
-      permission = await Geolocator.requestPermission();
-    }
-
     if (permission == LocationPermission.deniedForever) {
       return DriverLocationAccess.permissionDeniedForever;
     }
@@ -73,14 +65,6 @@ class DriverTrackingService {
         accuracy: configuration.accuracy!,
         distanceFilter: configuration.distanceFilterMeters!,
         intervalDuration: configuration.androidIntervalDuration,
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'MasiTrack',
-          notificationText: 'Ubicación activa para seguimiento de flota',
-          notificationChannelName: 'MasiTrack — Seguimiento de flota',
-          setOngoing: true,
-          enableWakeLock: false,
-          enableWifiLock: false,
-        ),
       );
     }
 

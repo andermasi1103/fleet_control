@@ -214,13 +214,13 @@ class _ViewsErrorCard extends StatelessWidget {
   );
 }
 
-class _DriverLocationStatusCard extends StatelessWidget {
+class _DriverLocationStatusCard extends ConsumerWidget {
   const _DriverLocationStatusCard({required this.state});
 
   final DriverTrackingState state;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final (icon, title, color) = switch (state.status) {
       DriverTrackingStatus.active => (
         Icons.location_on,
@@ -236,6 +236,11 @@ class _DriverLocationStatusCard extends StatelessWidget {
       DriverTrackingStatus.permissionDeniedForever => (
         Icons.location_off,
         'Ubicación sin permiso',
+        Theme.of(context).colorScheme.error,
+      ),
+      DriverTrackingStatus.notificationsBlocked => (
+        Icons.notifications_off_outlined,
+        'Notificaciones bloqueadas',
         Theme.of(context).colorScheme.error,
       ),
       DriverTrackingStatus.serviceDisabled || DriverTrackingStatus.idle => (
@@ -266,8 +271,31 @@ class _DriverLocationStatusCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               state.message ??
-                  'MasiTrack utiliza tu ubicación mientras la aplicación está abierta para informar tu disponibilidad y apoyar la operación de flota.',
+                  (state.isTrackingRequested
+                      ? 'MasiTrack informa tu ubicación durante la jornada activa, incluso si la app queda en segundo plano.'
+                      : 'Inicia tu jornada para compartir tu ubicación con la operación de flota.'),
             ),
+            const SizedBox(height: 12),
+            if (state.isTrackingRequested)
+              OutlinedButton.icon(
+                onPressed: state.status == DriverTrackingStatus.starting
+                    ? null
+                    : () => ref
+                        .read(driverTrackingProvider.notifier)
+                        .stopTracking(),
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: const Text('FINALIZAR JORNADA'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: state.status == DriverTrackingStatus.starting
+                    ? null
+                    : () => ref
+                        .read(driverTrackingProvider.notifier)
+                        .startTracking(),
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('INICIAR SEGUIMIENTO'),
+              ),
           ],
         ),
       ),
