@@ -86,15 +86,36 @@ class OrdersDataSource {
     String token, {
     required bool administrative,
   }) async {
-    final data = await _call(
-      administrative ? '/api/locations' : '/api/me/locations',
-      token,
-      'GET',
-    );
-    return (data['locations'] as List)
-        .map((e) => LocationDto.fromJson(Map<String, dynamic>.from(e as Map)))
-        .where((x) => x.isActive)
-        .toList();
+    try {
+      final data = await _call(
+        administrative ? '/api/locations' : '/api/me/locations',
+        token,
+        'GET',
+      );
+      final locations = data['locations'];
+      if (locations is! List) {
+        throw const FormatException('La respuesta de locales es inválida.');
+      }
+      return locations
+          .map(
+            (item) =>
+                LocationDto.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
+          .where((location) => location.isActive)
+          .toList(growable: false);
+    } on Failure {
+      rethrow;
+    } on FormatException {
+      throw const Failure(
+        message: 'La respuesta de locales es inválida.',
+        type: FailureType.backend,
+      );
+    } catch (_) {
+      throw const Failure(
+        message: 'La respuesta de locales es inválida.',
+        type: FailureType.backend,
+      );
+    }
   }
 
   Future<List<OrderDescriptionDto>> descriptions(

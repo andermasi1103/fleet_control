@@ -21,12 +21,15 @@ class OrdersState {
     this.orders = const [],
     this.locations = const [],
     this.descriptions = const [],
+    this.locationsLoaded = false,
+    this.locationsError,
     this.error,
   });
-  final bool loading, creating, cancelling;
+  final bool loading, creating, cancelling, locationsLoaded;
   final List<OrderDto> orders;
   final List<LocationDto> locations;
   final List<OrderDescriptionDto> descriptions;
+  final String? locationsError;
   final String? error;
   OrdersState copyWith({
     bool? loading,
@@ -35,7 +38,10 @@ class OrdersState {
     List<OrderDto>? orders,
     List<LocationDto>? locations,
     List<OrderDescriptionDto>? descriptions,
+    bool? locationsLoaded,
+    String? locationsError,
     String? error,
+    bool clearLocationsError = false,
     bool clearError = false,
   }) => OrdersState(
     loading: loading ?? this.loading,
@@ -44,6 +50,10 @@ class OrdersState {
     orders: orders ?? this.orders,
     locations: locations ?? this.locations,
     descriptions: descriptions ?? this.descriptions,
+    locationsLoaded: locationsLoaded ?? this.locationsLoaded,
+    locationsError: clearLocationsError
+        ? null
+        : locationsError ?? this.locationsError,
     error: clearError ? null : error ?? this.error,
   );
 }
@@ -64,26 +74,63 @@ class OrdersNotifier extends Notifier<OrdersState> {
       );
       return;
     }
-    state = state.copyWith(loading: true, clearError: true);
-    try {
-      final source = ref.read(ordersDataSourceProvider);
-      final role = ref.read(sessionProvider).session?.user.role;
-      final values = await Future.wait([
-        source.list(t),
-        source.locations(
-          t,
-          administrative:
-              role == 'super_admin' || role == 'admin' || role == 'supervisor',
-        ),
-      ]);
-      state = state.copyWith(
-        loading: false,
-        orders: values[0] as List<OrderDto>,
-        locations: values[1] as List<LocationDto>,
-      );
-    } on Failure catch (e) {
-      state = state.copyWith(loading: false, error: e.message);
-    }
+    state = state.copyWith(
+      loading: true,
+      locationsLoaded: false,
+      clearError: true,
+      clearLocationsError: true,
+    );
+    final source = ref.read(ordersDataSourceProvider);
+    final role = ref.read(sessionProvider).session?.user.role;
+    List<OrderDto>? orders;
+    List<LocationDto>? locations;
+    Failure? ordersFailure;
+    Failure? locationsFailure;
+
+    await Future.wait<void>([
+      () async {
+        try {
+          orders = await source.list(t);
+        } on Failure catch (error) {
+          ordersFailure = error;
+        } catch (_) {
+          ordersFailure = const Failure(
+            message: 'No fue posible cargar los pedidos.',
+            type: FailureType.backend,
+          );
+        }
+      }(),
+      () async {
+        try {
+          locations = await source.locations(
+            t,
+            administrative:
+                role == 'super_admin' ||
+                role == 'admin' ||
+                role == 'supervisor',
+          );
+        } on Failure catch (error) {
+          locationsFailure = error;
+        } catch (_) {
+          locationsFailure = const Failure(
+            message: 'No fue posible cargar los locales.',
+            type: FailureType.backend,
+          );
+        }
+      }(),
+    ]);
+
+    final failure = locationsFailure ?? ordersFailure;
+    state = state.copyWith(
+      loading: false,
+      orders: orders ?? const [],
+      locations: locations ?? const [],
+      locationsLoaded: locationsFailure == null,
+      locationsError: locationsFailure?.message,
+      error: failure?.message,
+      clearLocationsError: locationsFailure == null,
+      clearError: failure == null,
+    );
   }
 
   Future<void> loadDescriptions(

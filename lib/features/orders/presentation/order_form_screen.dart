@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/widgets/app_loading.dart';
 import '../../authentication/providers/session_provider.dart';
 import '../../locations/presentation/widgets/location_map_preview.dart';
 import '../data/dtos/order_dto.dart';
@@ -29,6 +30,17 @@ class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      final state = ref.read(ordersProvider);
+      if (!state.loading && !state.locationsLoaded) {
+        ref.read(ordersProvider.notifier).load();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     for (final controller in [_destination, _invoice, _contact, _notes]) {
       controller.dispose();
@@ -40,6 +52,12 @@ class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(ordersProvider);
     final isLocal = ref.watch(sessionProvider).session?.user.role == 'local';
+    if (state.loading || (!state.locationsLoaded && state.error == null)) {
+      return _loadingLocations();
+    }
+    final locationsError =
+        state.locationsError ?? (state.locationsLoaded ? null : state.error);
+    if (locationsError != null) return _locationsError(locationsError);
     if (state.locations.isEmpty) return _noLocations();
     final location = state.locations.firstWhere(
       (item) => item.id == _locationId,
@@ -100,7 +118,9 @@ class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
                       else
                         DropdownButtonFormField<String>(
                           initialValue: _locationId ?? location.id,
-                          decoration: const InputDecoration(labelText: 'Local *'),
+                          decoration: const InputDecoration(
+                            labelText: 'Local *',
+                          ),
                           items: state.locations
                               .map(
                                 (item) => DropdownMenuItem(
@@ -264,6 +284,31 @@ class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
     appBar: AppBar(title: const Text('Nuevo pedido')),
     body: const Center(
       child: Text('No tienes locales asignados para crear pedidos.'),
+    ),
+  );
+
+  Widget _loadingLocations() => Scaffold(
+    appBar: AppBar(title: const Text('Nuevo pedido')),
+    body: const AppLoading(),
+  );
+
+  Widget _locationsError(String error) => Scaffold(
+    appBar: AppBar(title: const Text('Nuevo pedido')),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(error, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: () => ref.read(ordersProvider.notifier).load(),
+              child: const Text('REINTENTAR'),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 
